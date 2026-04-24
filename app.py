@@ -1,90 +1,47 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- 1. PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="LearningPad | AI Storyboarder",
-    page_icon="🎬",
-    layout="wide"
-)
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="LearningPad Storyboarder", layout="wide")
 
-# Custom CSS for a professional look
-st.markdown("""
-    <style>
-    .main { background-color: #f0f2f6; }
-    .stTextArea textarea { font-size: 16px !important; }
-    .stButton>button { 
-        width: 100%; 
-        border-radius: 8px; 
-        height: 3.5em; 
-        background-color: #007bff; 
-        color: white; 
-        font-weight: bold;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- API CONFIG ---
+# Active Gemini Key ikkada pettu
+API_KEY = "AIzaSyDe7xylvvhOyjRHLFbcCydwUqMHHQAdl9w"
+genai.configure(api_key=API_KEY)
 
-# --- 2. API CONFIGURATION ---
-# Mowa, ikkada nee Gemini API Key correct ga pettu
-genai.configure(api_key="AIzaSyDe7xylvvhOyjRHLFbcCydwUqMHHQAdl9w")
-
-# --- 3. UI LAYOUT ---
-st.title("🎬 LearningPad AI: 3D Storyboard Director")
-st.write("Textbook content ni 3D Artist ki arthamayye **Technical Production Brief** ga marchu.")
+# --- UI ---
+st.title("🎬 LearningPad AI Storyboarder")
 st.write("---")
 
-col1, col2 = st.columns([1, 2], gap="large")
+text_input = st.text_area("Textbook content paste chey mowa:", height=300)
 
-with col1:
-    st.header("📖 Input Content")
-    text_input = st.text_area(
-        "Textbook Page Content Paste Chey:", 
-        height=400, 
-        placeholder="Example: The internal structure of Mitochondria and its energy production..."
-    )
-    generate_btn = st.button("Generate Technical Storyboard")
-
-with col2:
-    st.header("📋 3D Artist Brief (English)")
-    
-    if generate_btn:
-        if text_input:
-            with st.spinner("Gemini is analyzing the content for 3D production..."):
+if st.button("Generate Storyboard"):
+    if text_input:
+        with st.spinner("AI processing..."):
+            try:
+                # TRYING GEMINI-PRO (Better stability in some regions)
+                # Model name 'gemini-1.5-pro' or 'gemini-pro' try cheddam
                 try:
-                    # UPDATED: Use stable model string 'gemini-1.5-flash'
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    
-                    # Technical TD Prompt for the best output
-                    master_prompt = f"""
-                    Act as a Senior 3D Technical Director. Convert the following textbook content into a 
-                    detailed, scene-by-scene production storyboard for a 3D Artist.
-                    
-                    Rules:
-                    1. Output MUST be in English.
-                    2. Instructions must be technical (mention mesh types, animations, etc.).
-                    3. Animation Logic: Must be GLB compatible (Use Bones/Skeletal animation or Shape Keys). 
-                       Avoid complex particle simulations.
-                    
-                    Format: Provide a Markdown Table with these columns:
-                    | Scene # | Visuals & 3D Assets | Animation Logic (Technical) | Labels & UI | Narration (Voiceover) |
-                    
-                    Content to analyze: {text_input}
-                    """
-                    
-                    response = model.generate_content(master_prompt)
-                    
-                    # Final result rendering
-                    st.markdown(response.text)
-                    st.success("Successfully Generated! Artist can start working now.")
-                    st.balloons() # Deployment success feeling kosam
-                    
-                except Exception as e:
-                    # 404 Fix check: if it still fails, tell them to check API key status
-                    st.error(f"Error: {e}")
-                    st.info("Tip: API Key active ga undho ledho Google AI Studio lo check chey mowa.")
-        else:
-            st.warning("Mowa, mundu textbook text enter chey!")
-
-# --- 4. FOOTER ---
-st.markdown("---")
-st.caption("LearningPad Internal Tool | Optimized for GLB Pipeline")
+                    model = genai.GenerativeModel('gemini-1.5-pro')
+                    st.info("Using Gemini 1.5 Pro Model")
+                except:
+                    model = genai.GenerativeModel('gemini-pro')
+                    st.info("Using Gemini Pro Model")
+                
+                prompt = f"""
+                Act as a 3D Art Director. Convert this text into a scene-by-scene 
+                3D storyboard table in English.
+                Include: Scene #, 3D Visuals, Animation Logic (GLB safe), Labels, and Narration.
+                
+                Content: {text_input}
+                """
+                
+                response = model.generate_content(prompt)
+                st.markdown(response.text)
+                st.success("Generated!")
+                
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                st.write("Mowa, okavela malli 404 osthe, Google AI Studio lo 'Model' dropdown lo ఏ model work avthundo chudu.")
+    else:
+        st.warning("Enter some text first!")
