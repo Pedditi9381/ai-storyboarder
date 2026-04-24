@@ -9,115 +9,74 @@ st.set_page_config(
     layout="wide"
 )
 
-# Professional Studio UI Styling
+# Professional English UI Styling
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    
-    .main { background-color: #0e1117; color: #ffffff; }
-    .stTextArea textarea { 
-        background-color: #161b22; 
-        color: #e6edf3; 
-        border: 1px solid #30363d;
-        border-radius: 10px;
-    }
+    .main { background-color: #f8f9fa; color: #1d1d1f; }
+    .stTextArea textarea { border-radius: 10px; border: 1px solid #d2d2d7; }
     .stButton>button { 
-        width: 100%; 
-        border-radius: 8px; 
-        height: 3.5em; 
-        background: linear-gradient(90deg, #1f6feb 0%, #114ba8 100%);
-        color: white; 
-        font-weight: 700;
-        border: none;
-        transition: 0.3s;
+        width: 100%; border-radius: 8px; height: 3.5em; 
+        background-color: #0071e3; color: white; font-weight: 700; border: none; 
     }
-    .stButton>button:hover { 
-        background: linear-gradient(90deg, #388bfd 0%, #1f6feb 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(31, 111, 235, 0.3);
-    }
-    .status-box {
-        padding: 20px;
-        border-radius: 10px;
-        background-color: #161b22;
-        border-left: 5px solid #1f6feb;
-    }
+    .stButton>button:hover { background-color: #005bb5; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. API CONFIGURATION ---
-# Using your new key
-API_KEY = "AIzaSyBzDQ-ro7rXVgX2BGaBuzC2EOZ_pt4tt1M"
-# Standardizing to v1beta for Gemini 1.5 Flash
-API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+# --- 2. API CONFIGURATION (SECURE) ---
+# Key will be pulled from Streamlit Secrets
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except Exception:
+    st.error("Setup Error: Please add 'OPENAI_API_KEY' in your Streamlit Secrets dashboard.")
+    st.stop()
 
-# --- 3. SIDEBAR ---
-with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/3d-model.png", width=70)
-    st.title("Production Control")
-    st.markdown("---")
-    st.write("**Artist:** Raviteja")
-    st.write("**Project:** LearningPad v3.0")
-    st.write("**Engine:** Gemini 3 Flash")
-    st.divider()
-    st.success("API Status: Connected")
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
-# --- 4. MAIN INTERFACE ---
-st.markdown("# 🎬 AI Storyboard Director")
-st.markdown("##### Transform Educational Text into Production-Ready 3D Briefs")
-st.write("---")
+# --- 3. MAIN INTERFACE ---
+st.title("🎬 3D Storyboard Director")
+st.write("Convert textbook chapters into production-ready 3D Artist briefs.")
+st.divider()
 
 col1, col2 = st.columns([1, 1.5], gap="large")
 
 with col1:
-    st.subheader("📥 Textbook Content")
-    text_input = st.text_area(
-        "Paste the chapter content or script here:", 
-        height=400, 
-        placeholder="e.g., Working of the Human Heart, Layers of the Earth..."
-    )
-    generate_btn = st.button("🚀 GENERATE STORYBOARD")
+    st.subheader("📥 Input Content")
+    text_input = st.text_area("Paste Textbook Content or Script:", height=450, placeholder="e.g., Structure of the Human Heart...")
+    generate_btn = st.button("🚀 GENERATE PRODUCTION BRIEF")
 
 with col2:
-    st.subheader("📋 3D Artist Specifications")
+    st.subheader("📋 Technical 3D Storyboard")
     
     if generate_btn:
         if text_input:
-            with st.spinner("Analyzing geometry and animation logic..."):
+            with st.spinner("AI is generating technical 3D specifications..."):
+                headers = {
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Content-Type": "application/json"
+                }
                 payload = {
-                    "contents": [{
-                        "parts": [{
-                            "text": (
-                                "Act as a Senior 3D Technical Director for LearningPad. "
-                                "Task: Convert the provided educational text into a technical 3D storyboard table. "
-                                "Constraint: Suggest GLB-safe animations only (Shape keys/Skeletal). "
-                                "Language: English. "
-                                "Format: Markdown Table with columns: [Scene #] | [3D Assets & Visuals] | [Animation Logic] | [Labels/UI] | [Narration Script]"
-                                f"\n\nContent: {text_input}"
-                            )
-                        }]
-                    }]
+                    "model": "gpt-4o",
+                    "messages": [
+                        {"role": "system", "content": "You are a Senior 3D Technical Director. Convert text into a professional Markdown table. Columns: Scene #, 3D Assets & Visuals, Animation Logic (GLB Safe), Labels/UI, Narration Script. Use English only."},
+                        {"role": "user", "content": f"Create a technical storyboard for: {text_input}"}
+                    ]
                 }
                 
                 try:
-                    response = requests.post(API_URL, json=payload)
+                    response = requests.post(OPENAI_URL, headers=headers, json=payload)
                     result = response.json()
                     
                     if response.status_code == 200:
-                        output = result['candidates'][0]['content']['parts'][0]['text']
+                        output = result['choices'][0]['message']['content']
                         st.markdown(output)
+                        st.success("Successfully Generated via GPT-4o")
                         st.balloons()
                     else:
-                        error_msg = result.get('error', {}).get('message', 'Unknown API Error')
-                        st.error(f"Engine Error: {error_msg}")
-                        st.info("Check if your API key has the 'Generative Language API' enabled in AI Studio.")
+                        st.error(f"Error: {result.get('error', {}).get('message')}")
                 except Exception as e:
                     st.error(f"Connection Failed: {str(e)}")
         else:
-            st.warning("Please input textbook content to begin.")
+            st.warning("Please enter content to proceed.")
 
-# --- 5. FOOTER ---
-st.write("---")
-st.caption("© 2026 LearningPad | Professional 3D Pipeline Tool | Powered by Gemini 3")
+st.divider()
+st.caption("© 2026 LearningPad | Professional 3D Pipeline Tool")
