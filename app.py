@@ -30,16 +30,16 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. API CONFIGURATION ---
-# Using the provided Gemini 3 Key
 API_KEY = "AIzaSyC00GP4p153fnGdrywn60AONQuueLKnF7c"
-# Explicitly using the v1 endpoint for maximum compatibility with Paid Tier
-API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+
+# CHANGED: Using v1beta endpoint which explicitly supports gemini-1.5-flash
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 # --- 3. SIDEBAR / INFO ---
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=80)
     st.title("Admin Console")
-    st.info("**Environment:** Production\n\n**Engine:** Gemini 3 Flash\n\n**Pipeline:** 3D Asset Creation")
+    st.info("**Environment:** Production\n\n**Engine:** Gemini 3 Flash (v1beta)\n\n**Pipeline:** 3D Asset Creation")
     st.divider()
     st.caption("Developed for LearningPad 3D Production")
 
@@ -55,7 +55,7 @@ with col1:
     text_input = st.text_area(
         "Enter Textbook/Script Text:", 
         height=400, 
-        placeholder="e.g., Describe the process of Mitosis or how a Steam Engine works..."
+        placeholder="e.g., Describe the process of Mitosis..."
     )
     generate_btn = st.button("GENERATE PRODUCTION BRIEF")
 
@@ -64,8 +64,7 @@ with col2:
     
     if generate_btn:
         if text_input:
-            with st.spinner("Processing through Gemini 3 Engine..."):
-                # REST API Payload Structure
+            with st.spinner("Processing through Gemini 3 Engine (v1beta)..."):
                 payload = {
                     "contents": [{
                         "parts": [{
@@ -86,16 +85,17 @@ with col2:
                     result = response.json()
                     
                     if response.status_code == 200:
-                        # Extract result text safely
                         try:
                             output_text = result['candidates'][0]['content']['parts'][0]['text']
                             st.markdown(output_text)
                             st.success("Generation Complete.")
                         except (KeyError, IndexError):
-                            st.error("Error parsing response. The model might be busy.")
+                            st.error("Model returned an unexpected format. Try again.")
                     else:
+                        # Displaying specific error message from Google
                         error_msg = result.get('error', {}).get('message', 'Unknown API Error')
                         st.error(f"API Error {response.status_code}: {error_msg}")
+                        st.info("Check if your API Key is restricted to v1beta in Google Cloud Console.")
                         
                 except Exception as e:
                     st.error(f"Connection Error: {str(e)}")
@@ -103,4 +103,4 @@ with col2:
             st.warning("Please enter source content first.")
 
 st.divider()
-st.caption("© 2026 LearningPad AI Suite | Gemini 3 Engine (REST Stable)")
+st.caption("© 2026 LearningPad AI Suite | Gemini 3 Engine (REST v1beta)")
