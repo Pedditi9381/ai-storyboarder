@@ -6,7 +6,7 @@ import json
 st.set_page_config(page_title="LearningPad AI Storyboarder", layout="wide")
 
 # API Configuration
-API_KEY = "AIzaSyAm5-eoRL24iN8cLfz97riLdKhw9pRNq8U"
+API_KEY = "AIzaSyBzDQ-ro7rXVgX2BGaBuzC2EOZ_pt4tt1M"
 
 def call_gemini_api(model_name, text):
     # Trying v1beta endpoint
