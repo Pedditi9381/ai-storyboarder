@@ -1,91 +1,110 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
 import PyPDF2
-from PIL import Image
-import io
+import json
 
-# --- 1. PAGE CONFIG ---
-st.set_page_config(page_title="LearningPad | 3D Scene Director", layout="wide")
+# --- 1. PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="LearningPad | 3D Scene Director",
+    page_icon="🎬",
+    layout="wide"
+)
 
+# Professional UI Styling
 st.markdown("""
     <style>
     .main { background-color: #0f172a; color: #f8fafc; }
+    .stTextArea textarea { background-color: #1e293b; color: #f1f5f9; border-radius: 12px; }
     .stButton>button { 
         width: 100%; border-radius: 10px; height: 3.5em; 
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white; font-weight: 700; border: none;
     }
-    .stTextArea textarea { background-color: #1e293b; color: #f1f5f9; border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. API CONFIG ---
+# --- 2. GROQ API CONFIG ---
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except:
-    st.error("Please add 'GEMINI_API_KEY' in Streamlit Secrets.")
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except Exception:
+    st.error("Setup Error: Please add 'GROQ_API_KEY' in Streamlit Secrets.")
     st.stop()
 
-# --- 3. MAIN UI ---
-st.markdown("<h1 style='text-align: center; color: #3b82f6;'>🎬 3D Scene Director (Multimodal)</h1>", unsafe_allow_html=True)
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# --- 3. MAIN INTERFACE ---
+st.markdown("<h1 style='text-align: center; color: #3b82f6;'>🎬 3D Scene Director</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Transform Content into 5-6 Production Scenes</p>", unsafe_allow_html=True)
 st.write("---")
 
 col1, col2 = st.columns([1, 1.6], gap="large")
 
 with col1:
-    st.subheader("📥 Input Source")
-    input_type = st.radio("Choose Input Type:", ["Text", "Image (Textbook Scan)", "PDF Document"])
+    st.subheader("📥 Input Content")
+    input_type = st.radio("Choose Input Type:", ["Text/Script", "PDF Document"])
     
-    user_content = None
+    final_text = ""
     
-    if input_type == "Text":
-        user_content = st.text_area("Paste Content:", height=250)
-    elif input_type == "Image (Textbook Scan)":
-        uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
-        if uploaded_file:
-            user_content = Image.open(uploaded_file)
-            st.image(user_content, caption="Uploaded Scan", width=300)
+    if input_type == "Text/Script":
+        final_text = st.text_area("Paste Content:", height=300, placeholder="e.g., How an electric motor works...")
+    
     elif input_type == "PDF Document":
         uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"])
         if uploaded_pdf:
             pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
-            user_content = ""
+            extracted_text = ""
             for page in pdf_reader.pages:
-                user_content += page.extract_text()
+                extracted_text += page.extract_text()
+            final_text = extracted_text
             st.success("PDF Content Extracted!")
 
-    generate_btn = st.button("🚀 GENERATE 5-6 SCENES")
+    generate_btn = st.button("🚀 GENERATE STORYBOARD")
 
 with col2:
     st.subheader("📋 Production Specifications")
     
     if generate_btn:
-        if user_content:
-            with st.spinner("Analyzing content and designing scenes..."):
-                prompt = """
-                Act as a Senior 3D Technical Director. 
-                Task: Convert the provided content into exactly 5 to 6 scenes for a 3D educational video.
-                Output Format: A Markdown table with:
-                1. Scene #
-                2. 3D Assets (Required models)
-                3. Animation Logic (GLB/Web friendly)
-                4. Visual Description
-                5. Narration Script
+        if final_text:
+            with st.spinner("Groq LPU is analyzing and designing scenes..."):
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
                 
-                Keep the logic optimized for mobile/web GLB export. Use technical 3D terms.
-                """
+                payload = {
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [
+                        {
+                            "role": "system", 
+                            "content": (
+                                "You are a Senior 3D Technical Director. "
+                                "Task: Convert the input into exactly 5 to 6 scenes for a 3D educational video. "
+                                "Output Format: A Markdown table with columns: "
+                                "Scene # | 3D Assets | Animation Logic (GLB Safe) | Visual Description | Narration Script. "
+                                "Keep logic optimized for web-based GLB export. Use English only."
+                            )
+                        },
+                        {
+                            "role": "user", 
+                            "content": f"Create a 3D storyboard for: {final_text}"
+                        }
+                    ],
+                    "temperature": 0.3
+                }
                 
                 try:
-                    # Gemini handles both text and images automatically
-                    response = model.generate_content([prompt, user_content] if input_type == "Image (Textbook Scan)" else [prompt, user_content])
-                    st.markdown(response.text)
-                    st.success("Production Brief Ready!")
-                    st.balloons()
+                    response = requests.post(GROQ_URL, headers=headers, json=payload)
+                    if response.status_code == 200:
+                        result = response.json()
+                        st.markdown(result['choices'][0]['message']['content'])
+                        st.success("Storyboard Ready!")
+                        st.balloons()
+                    else:
+                        st.error(f"Engine Error: {response.status_code}")
                 except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                    st.error(f"Connection Failed: {str(e)}")
         else:
-            st.warning("Please provide input content first.")
+            st.warning("Please provide input content.")
 
 st.divider()
-st.caption("© 2026 LearningPad | Professional 3D Multimodal Pipeline")
+st.caption("© 2026 LearningPad | Professional 3D Pipeline Tool | Powered by Groq")
