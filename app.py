@@ -5,7 +5,7 @@ import google.generativeai as genai
 st.set_page_config(page_title="LearningPad Storyboarder", layout="wide")
 
 # --- API CONFIG ---
-API_KEY = "AIzaSyDe7xylvvhOyjRHLFbcCydwUqMHHQAdl9w"
+API_KEY = "AIzaSyBxgHlVyOWCxx9itHzGY_V7E-pgjpuDxM0"
 genai.configure(api_key=API_KEY)
 
 st.title("🎬 LearningPad AI Storyboarder")
