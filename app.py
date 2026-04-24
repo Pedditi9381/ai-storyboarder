@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
+import json
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -12,37 +13,39 @@ st.set_page_config(
 st.markdown("""
     <style>
     .main { background-color: #f4f7f6; }
-    .stTextArea textarea { font-family: 'Inter', sans-serif; font-size: 14px; }
+    .stTextArea textarea { font-family: 'Inter', sans-serif; font-size: 14px; border-radius: 8px; }
     .stButton>button { 
         width: 100%; 
-        border-radius: 4px; 
-        height: 3em; 
-        background-color: #2c3e50; 
+        border-radius: 6px; 
+        height: 3.5em; 
+        background-color: #1a73e8; 
         color: white; 
         font-weight: 600;
         border: none;
     }
-    .stButton>button:hover { background-color: #34495e; color: #ecf0f1; }
+    .stButton>button:hover { background-color: #1557b0; }
     header { visibility: hidden; }
     footer { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. API CONFIGURATION ---
-API_KEY = "AIzaSyBxgHlVyOWCxx9itHzGY_V7E-pgjpuDxM0"
-genai.configure(api_key=API_KEY)
+# Using the provided Gemini 3 Key
+API_KEY = "AIzaSyC00GP4p153fnGdrywn60AONQuueLKnF7c"
+# Explicitly using the v1 endpoint for maximum compatibility with Paid Tier
+API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 # --- 3. SIDEBAR / INFO ---
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=80)
-    st.title("Production Settings")
-    st.info("**Pipeline:** 3D Educational Animation\n\n**Target:** GLB / Web-3D")
+    st.title("Admin Console")
+    st.info("**Environment:** Production\n\n**Engine:** Gemini 3 Flash\n\n**Pipeline:** 3D Asset Creation")
     st.divider()
-    st.caption("LearningPad 3D Production Suite")
+    st.caption("Developed for LearningPad 3D Production")
 
 # --- 4. MAIN INTERFACE ---
 st.title("🎬 3D Storyboard Director")
-st.write("Generate technical 3D briefs from textbook content.")
+st.write("Instant conversion of textbook content into technical 3D production briefs.")
 st.divider()
 
 col1, col2 = st.columns([1, 2], gap="large")
@@ -50,51 +53,54 @@ col1, col2 = st.columns([1, 2], gap="large")
 with col1:
     st.subheader("📥 Source Content")
     text_input = st.text_area(
-        "Paste Textbook Text:", 
-        height=450, 
-        placeholder="e.g., The working of a DC Motor..."
+        "Enter Textbook/Script Text:", 
+        height=400, 
+        placeholder="e.g., Describe the process of Mitosis or how a Steam Engine works..."
     )
-    generate_btn = st.button("GENERATE BRIEF")
+    generate_btn = st.button("GENERATE PRODUCTION BRIEF")
 
 with col2:
-    st.subheader("📋 3D Technical Storyboard")
+    st.subheader("📋 Technical Production Brief")
     
     if generate_btn:
         if text_input:
-            with st.spinner("Accessing Gemini AI engine..."):
-                # FALLBACK LOGIC: Try different model strings to bypass 404
-                success = False
-                # Priority: Stable Pro -> Flash (no prefix) -> Latest
-                model_names = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro']
+            with st.spinner("Processing through Gemini 3 Engine..."):
+                # REST API Payload Structure
+                payload = {
+                    "contents": [{
+                        "parts": [{
+                            "text": (
+                                "Act as a Senior 3D Technical Director. Convert the following text into a technical storyboard. "
+                                "Focus on educational accuracy and GLB-safe animation (Bones/Shape keys). "
+                                "Format the output as a Markdown Table with columns: Scene #, Visuals & 3D Assets, "
+                                "Animation Logic, Labels & UI, Narration Script.\n\n"
+                                f"Content: {text_input}"
+                            )
+                        }]
+                    }]
+                }
+                headers = {'Content-Type': 'application/json'}
                 
-                for model_name in model_names:
-                    if success: break
-                    try:
-                        model = genai.GenerativeModel(model_name)
+                try:
+                    response = requests.post(API_URL, headers=headers, data=json.dumps(payload))
+                    result = response.json()
+                    
+                    if response.status_code == 200:
+                        # Extract result text safely
+                        try:
+                            output_text = result['candidates'][0]['content']['parts'][0]['text']
+                            st.markdown(output_text)
+                            st.success("Generation Complete.")
+                        except (KeyError, IndexError):
+                            st.error("Error parsing response. The model might be busy.")
+                    else:
+                        error_msg = result.get('error', {}).get('message', 'Unknown API Error')
+                        st.error(f"API Error {response.status_code}: {error_msg}")
                         
-                        master_prompt = f"""
-                        Act as a Senior 3D Technical Director. 
-                        Convert the text into a 3D storyboard table.
-                        - Animation: Suggest GLB-safe methods.
-                        - Format: Markdown Table.
-                        - Columns: | Scene # | Visuals & Assets | Animation Logic | Labels | Narration |
-                        
-                        Content: {text_input}
-                        """
-                        
-                        response = model.generate_content(master_prompt)
-                        
-                        if response.text:
-                            st.markdown(response.text)
-                            st.success(f"Generated using {model_name}")
-                            success = True
-                    except Exception as e:
-                        continue # Try the next model if 404 occurs
-                
-                if not success:
-                    st.error("API Connection Error: All models returned 404. Please check if your API Key is restricted to a specific region or project.")
+                except Exception as e:
+                    st.error(f"Connection Error: {str(e)}")
         else:
-            st.warning("Please enter source content.")
+            st.warning("Please enter source content first.")
 
 st.divider()
-st.caption("© 2026 LearningPad AI Suite")
+st.caption("© 2026 LearningPad AI Suite | Gemini 3 Engine (REST Stable)")
