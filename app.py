@@ -14,7 +14,7 @@ st.markdown("""
 
 # API Configuration
 # Dashboard lo "Secrets" lo pettadam better, leda ikkada direct ga pettu (Demo kabatti)
-genai.configure(api_key="YOUR_GEMINI_API_KEY_HERE")
+genai.configure(api_key="AIzaSyDe7xylvvhOyjRHLFbcCydwUqMHHQAdl9w")
 
 st.title("🎬 LearningPad AI: 3D Storyboard Director")
 st.write("---")
