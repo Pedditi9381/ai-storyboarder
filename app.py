@@ -1,82 +1,82 @@
 import streamlit as st
 import requests
-import json
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="LearningPad | 3D Storyboard AI",
+    page_title="LearningPad | Free AI Director",
     page_icon="🎬",
     layout="wide"
 )
 
-# Professional English UI Styling
+# Professional UI Styling
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; color: #1d1d1f; }
-    .stTextArea textarea { border-radius: 10px; border: 1px solid #d2d2d7; }
+    .main { background-color: #f0f2f6; color: #1e1e1e; }
+    .stTextArea textarea { border-radius: 12px; border: 2px solid #dfe1e5; }
     .stButton>button { 
-        width: 100%; border-radius: 8px; height: 3.5em; 
-        background-color: #0071e3; color: white; font-weight: 700; border: none; 
+        width: 100%; border-radius: 10px; height: 3.8em; 
+        background-color: #6366f1; color: white; font-weight: 700; border: none;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .stButton>button:hover { background-color: #005bb5; }
+    .stButton>button:hover { background-color: #4f46e5; border: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. API CONFIGURATION (SECURE) ---
-# Key will be pulled from Streamlit Secrets
-try:
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-except Exception:
-    st.error("Setup Error: Please add 'OPENAI_API_KEY' in your Streamlit Secrets dashboard.")
-    st.stop()
-
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+# --- 2. FREE API CONFIGURATION (Hugging Face) ---
+# Using Meta's Llama 3 via Hugging Face Public Inference
+API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
 
 # --- 3. MAIN INTERFACE ---
 st.title("🎬 3D Storyboard Director")
-st.write("Convert textbook chapters into production-ready 3D Artist briefs.")
-st.divider()
+st.markdown("##### Professional 3D Workflow Automation (Free Tier)")
+st.write("---")
 
 col1, col2 = st.columns([1, 1.5], gap="large")
 
 with col1:
-    st.subheader("📥 Input Content")
-    text_input = st.text_area("Paste Textbook Content or Script:", height=450, placeholder="e.g., Structure of the Human Heart...")
-    generate_btn = st.button("🚀 GENERATE PRODUCTION BRIEF")
+    st.subheader("📥 Textbook Content")
+    text_input = st.text_area("Paste Content Here:", height=400, placeholder="e.g., Structure of a Plant Cell...")
+    generate_btn = st.button("🚀 GENERATE STORYBOARD (FREE)")
 
 with col2:
-    st.subheader("📋 Technical 3D Storyboard")
+    st.subheader("📋 Production Ready Brief")
     
     if generate_btn:
         if text_input:
-            with st.spinner("AI is generating technical 3D specifications..."):
-                headers = {
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
-                    "Content-Type": "application/json"
-                }
+            with st.spinner("AI is thinking (Free Server)..."):
+                # System Prompt for 3D logic
+                prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+                You are a 3D Production Expert. Convert the input into a Markdown table.
+                Columns: Scene #, 3D Assets, Animation Logic (GLB Safe), Labels, Narration Script.<|eot_id|>
+                <|start_header_id|>user<|end_header_id|>
+                Content: {text_input}<|eot_id|>
+                <|start_header_id|>assistant<|end_header_id|>"""
+                
                 payload = {
-                    "model": "gpt-4o",
-                    "messages": [
-                        {"role": "system", "content": "You are a Senior 3D Technical Director. Convert text into a professional Markdown table. Columns: Scene #, 3D Assets & Visuals, Animation Logic (GLB Safe), Labels/UI, Narration Script. Use English only."},
-                        {"role": "user", "content": f"Create a technical storyboard for: {text_input}"}
-                    ]
+                    "inputs": prompt,
+                    "parameters": {"max_new_tokens": 1000, "temperature": 0.5}
                 }
                 
                 try:
-                    response = requests.post(OPENAI_URL, headers=headers, json=payload)
+                    # Requesting the public API
+                    response = requests.post(API_URL, json=payload)
                     result = response.json()
                     
                     if response.status_code == 200:
-                        output = result['choices'][0]['message']['content']
+                        # Extracting the text from Llama-3 format
+                        full_text = result[0]['generated_text']
+                        # Getting only the assistant's part
+                        output = full_text.split("<|assistant|>")[-1].strip()
                         st.markdown(output)
-                        st.success("Successfully Generated via GPT-4o")
+                        st.success("Generated using Free Llama-3 Engine")
                         st.balloons()
                     else:
-                        st.error(f"Error: {result.get('error', {}).get('message')}")
+                        st.error("Server Busy. Please wait 10 seconds and try again.")
+                        st.info("Since this is a free server, it might take a moment to wake up.")
                 except Exception as e:
-                    st.error(f"Connection Failed: {str(e)}")
+                    st.error(f"Error: {str(e)}")
         else:
-            st.warning("Please enter content to proceed.")
+            st.warning("Please enter text content.")
 
 st.divider()
-st.caption("© 2026 LearningPad | Professional 3D Pipeline Tool")
+st.caption("© 2026 LearningPad | Open Source 3D Tools")
