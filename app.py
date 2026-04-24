@@ -95,4 +95,38 @@ with col2:
                 You are a Senior 3D Technical Director for a production studio. 
                 Task: Convert the user's input into a professional Markdown table. 
                 Columns: Scene # | 3D Assets (Models needed) | Animation Logic (GLB/Web Safe) | Narration Brief.
-                Guidelines: Suggest
+                Guidelines: Suggest optimized geometry and simple bone/shape-key animations only. Use English.<|eot_id|>
+                <|start_header_id|>user<|end_header_id|>
+                Script: {text_input}<|eot_id|>
+                <|start_header_id|>assistant<|end_header_id|>"""
+                
+                payload = {
+                    "inputs": prompt,
+                    "parameters": {"max_new_tokens": 800, "temperature": 0.4}
+                }
+                
+                try:
+                    # Direct API Call
+                    response = requests.post(API_URL, json=payload)
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        # Extracting the assistant response
+                        raw_output = result[0]['generated_text']
+                        final_output = raw_output.split("<|assistant|>")[-1].strip()
+                        
+                        st.markdown(final_output)
+                        st.success("Analysis Complete!")
+                        st.balloons()
+                    elif response.status_code == 503:
+                        st.error("Model is currently loading on the server. Please wait 20 seconds and click again.")
+                    else:
+                        st.error(f"Engine Error: {response.status_code}")
+                except Exception as e:
+                    st.error("Server Timeout. Please try again.")
+        else:
+            st.warning("Please enter some text content to start.")
+
+# --- 5. FOOTER ---
+st.write("---")
+st.caption("© 2026 LearningPad | Professional 3D Pipeline Tool | Optimized for GLB Workflow")
