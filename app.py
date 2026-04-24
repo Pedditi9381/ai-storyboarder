@@ -29,7 +29,6 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. API CONFIGURATION ---
-# Replace with your active Gemini 3 API Key
 API_KEY = "AIzaSyBxgHlVyOWCxx9itHzGY_V7E-pgjpuDxM0"
 genai.configure(api_key=API_KEY)
 
@@ -37,17 +36,13 @@ genai.configure(api_key=API_KEY)
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=80)
     st.title("Production Settings")
-    st.info("""
-    **Pipeline:** 3D Educational Animation  
-    **Target Format:** GLB / Web-3D  
-    **Optimization:** Low-Poly / Skeletal Animation
-    """)
+    st.info("**Pipeline:** 3D Educational Animation\n\n**Target:** GLB / Web-3D")
     st.divider()
-    st.caption("Developed for LearningPad 3D Production Team")
+    st.caption("LearningPad 3D Production Suite")
 
 # --- 4. MAIN INTERFACE ---
 st.title("🎬 3D Storyboard Director")
-st.write("Convert textbook chapters into technical 3D artist briefs instantly.")
+st.write("Generate technical 3D briefs from textbook content.")
 st.divider()
 
 col1, col2 = st.columns([1, 2], gap="large")
@@ -55,52 +50,51 @@ col1, col2 = st.columns([1, 2], gap="large")
 with col1:
     st.subheader("📥 Source Content")
     text_input = st.text_area(
-        "Paste Textbook Text or Script:", 
+        "Paste Textbook Text:", 
         height=450, 
-        placeholder="e.g., Structure of the Atom, Laws of Motion, etc."
+        placeholder="e.g., The working of a DC Motor..."
     )
-    generate_btn = st.button("GENERATE PRODUCTION BRIEF")
+    generate_btn = st.button("GENERATE BRIEF")
 
 with col2:
     st.subheader("📋 3D Technical Storyboard")
     
     if generate_btn:
         if text_input:
-            with st.spinner("Analyzing content and generating technical specs..."):
-                try:
-                    # Invoking Gemini 3 Flash capability
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    
-                    master_prompt = f"""
-                    Act as a Senior 3D Technical Director for LearningPad. 
-                    Your task is to convert the provided textbook text into a technical storyboard 
-                    specifically for a 3D Artist.
-
-                    Requirements:
-                    1. Tone: Professional, technical, and concise.
-                    2. Animation: Suggest GLB-safe methods only (Bones, Shape Keys, UV Scrolling).
-                    3. Format: Must be a clean Markdown Table.
-
-                    Columns:
-                    | Scene # | Visuals & 3D Assets | Animation Logic | Labels & UI | Narration Script |
-                    
-                    Textbook Content: {text_input}
-                    """
-                    
-                    response = model.generate_content(master_prompt)
-                    
-                    if response.text:
-                        st.markdown(response.text)
-                        st.success("Brief generated successfully. Copy to production docs.")
-                    else:
-                        st.error("Model returned an empty response. Please check the input.")
+            with st.spinner("Accessing Gemini AI engine..."):
+                # FALLBACK LOGIC: Try different model strings to bypass 404
+                success = False
+                # Priority: Stable Pro -> Flash (no prefix) -> Latest
+                model_names = ['gemini-pro', 'gemini-1.5-flash', 'gemini-1.5-pro']
+                
+                for model_name in model_names:
+                    if success: break
+                    try:
+                        model = genai.GenerativeModel(model_name)
                         
-                except Exception as e:
-                    st.error(f"System Error: {str(e)}")
-                    st.info("Check your API Key status in Google AI Studio if this persists.")
+                        master_prompt = f"""
+                        Act as a Senior 3D Technical Director. 
+                        Convert the text into a 3D storyboard table.
+                        - Animation: Suggest GLB-safe methods.
+                        - Format: Markdown Table.
+                        - Columns: | Scene # | Visuals & Assets | Animation Logic | Labels | Narration |
+                        
+                        Content: {text_input}
+                        """
+                        
+                        response = model.generate_content(master_prompt)
+                        
+                        if response.text:
+                            st.markdown(response.text)
+                            st.success(f"Generated using {model_name}")
+                            success = True
+                    except Exception as e:
+                        continue # Try the next model if 404 occurs
+                
+                if not success:
+                    st.error("API Connection Error: All models returned 404. Please check if your API Key is restricted to a specific region or project.")
         else:
-            st.warning("Please enter source content to proceed.")
+            st.warning("Please enter source content.")
 
-# --- 5. FOOTER ---
 st.divider()
-st.caption("© 2026 LearningPad AI Suite | Gemini 3 Flash Engine")
+st.caption("© 2026 LearningPad AI Suite")
