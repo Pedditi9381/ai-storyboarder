@@ -15,9 +15,9 @@ st.markdown("""
 
 /* Reset & Base */
 html, body, [class*="css"] { font-family: 'Space Grotesk', sans-serif; }
-.main { background-color: #09090f; color: #e2e8f0; }
+.main { background-color: #06060f; color: #e2e8f0; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
-section[data-testid="stSidebar"] { background: #0d0d1a; border-right: 1px solid #1e1e3a; width: 260px !important; }
+section[data-testid="stSidebar"] { background: #080814; border-right: 1px solid #1a1a35; width: 260px !important; }
 section[data-testid="stSidebar"] .block-container { padding: 1rem !important; }
 
 /* Hide default Streamlit chrome */
@@ -495,207 +495,210 @@ with tabs[1]:
     if not active_sb:
         st.info("Open or create a storyboard from the **Storyboards** tab to start editing.")
     else:
-        left, right = st.columns([1, 1.8], gap="large")
+        # ── INPUT PANEL (compact, collapsible) ──────────────────────────────
+        with st.expander("⚙️ Input & Generation Controls", expanded=not active_sb.get("scenes")):
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                num_scenes = st.slider("Number of Scenes", min_value=3, max_value=12, value=6, key="num_scenes_slider")
+                input_type = st.radio("Input Source", ["Plain Text", "PDF Document"], horizontal=True, key="input_type_radio")
+            with c2:
+                final_text = ""
+                if input_type == "Plain Text":
+                    final_text = st.text_area(
+                        "Paste content here",
+                        height=130,
+                        placeholder="e.g., Working of a Steam Engine, steps of photosynthesis...",
+                        key="plain_text_input"
+                    )
+                    st.markdown(f'<div style="font-size:11px;color:#475569;text-align:right;">{len(final_text)} chars</div>', unsafe_allow_html=True)
+                else:
+                    uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_uploader")
+                    if uploaded_pdf:
+                        pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
+                        for page in pdf_reader.pages:
+                            final_text += (page.extract_text() or "")
+                        st.success(f"PDF extracted · {len(final_text)} chars")
 
-        with left:
-            st.markdown('<div class="card-title">Input & Controls</div>', unsafe_allow_html=True)
-            num_scenes = st.slider("Number of Scenes", min_value=3, max_value=12, value=6, key="num_scenes_slider")
-            input_type = st.radio("Input Source", ["Plain Text", "PDF Document"], horizontal=True, key="input_type_radio")
-
-            final_text = ""
-            if input_type == "Plain Text":
-                final_text = st.text_area(
-                    "Paste content here",
-                    height=220,
-                    placeholder="e.g., Working of a Steam Engine, steps of photosynthesis...",
-                    key="plain_text_input"
-                )
-                st.markdown(f'<div style="font-size:11px; color:#475569; text-align:right;">{len(final_text)} chars</div>', unsafe_allow_html=True)
-            else:
-                uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_uploader")
-                if uploaded_pdf:
-                    pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
-                    for page in pdf_reader.pages:
-                        final_text += (page.extract_text() or "")
-                    st.success(f"PDF extracted · {len(final_text)} chars")
-
-            st.markdown("---")
             gen_col, clear_col = st.columns(2)
             with gen_col:
                 generate_btn = st.button(f"🚀 Generate {num_scenes} Scenes", key="gen_btn", use_container_width=True)
             with clear_col:
-                clear_btn = st.button("✕ Clear Scenes", key="clear_btn", use_container_width=True)
+                clear_btn = st.button("✕ Clear All Scenes", key="clear_btn", use_container_width=True)
 
             if clear_btn and active_sb_id:
                 st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"] = []
                 st.rerun()
-
             if generate_btn and final_text:
                 with st.spinner(f"Generating {num_scenes} scenes with Groq..."):
-                    scenes = generate_scenes_groq(final_text, num_scenes)
-                    if scenes:
-                        st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"] = scenes
-                        st.success(f"✓ {len(scenes)} scenes generated!")
+                    scenes_gen = generate_scenes_groq(final_text, num_scenes)
+                    if scenes_gen:
+                        st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"] = scenes_gen
+                        st.success(f"✓ {len(scenes_gen)} scenes generated!")
                         st.rerun()
             elif generate_btn and not final_text:
                 st.warning("Add some content first.")
 
-            # Scene list (editable)
-            scenes = active_sb.get("scenes", [])
-            if scenes:
-                st.markdown("---")
-                st.markdown('<div class="card-title">Scene List</div>', unsafe_allow_html=True)
-                for i, sc in enumerate(scenes):
-                    with st.expander(f"Scene {sc.get('scene_number', i+1)}: {sc.get('title', 'Untitled')}"):
-                        # Narration
-                        st.markdown(f"""
-                        <div style="font-size:9px;font-weight:700;color:#fb7185;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Narration</div>
-                        <div style="font-size:12px;color:#e2e8f0;font-style:italic;border-left:2px solid #fb7185;padding-left:8px;line-height:1.6;margin-bottom:10px;">{sc.get('narration','—')}</div>
-                        """, unsafe_allow_html=True)
-                        # Assets
-                        assets = get_scene_assets(sc)
-                        if assets:
-                            tags_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets])
-                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Required 3D Assets</div><div class="scene-tags" style="margin-bottom:10px;">{tags_html}</div>', unsafe_allow_html=True)
-                        # Labels
-                        labels = sc.get("labels", [])
-                        if labels:
-                            lbl_html = " ".join([f'<span class="scene-tag" style="background:#1a2e1a;color:#4ade80;">{l}</span>' for l in labels])
-                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#4ade80;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Labels (UI Text)</div><div class="scene-tags" style="margin-bottom:10px;">{lbl_html}</div>', unsafe_allow_html=True)
-                        # Animation
-                        anim = sc.get("animation", "")
-                        if anim:
-                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Animation Logic</div>', unsafe_allow_html=True)
-                            st.markdown(f'<div style="font-size:12px;color:#cbd5e1;background:#0d0d1a;border:1px solid #1e1e3a;border-radius:6px;padding:8px;white-space:pre-wrap;font-family:JetBrains Mono,monospace;line-height:1.6;margin-bottom:10px;">{anim}</div>', unsafe_allow_html=True)
-                        # Visual Description
-                        vd = sc.get("visual_description", "")
-                        if vd:
-                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#a78bfa;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Visual Description</div><div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:10px;">{vd}</div>', unsafe_allow_html=True)
-                        # Delete
-                        if st.button(f"Delete Scene {i+1}", key=f"del_scene_{i}"):
-                            st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"].pop(i)
-                            st.rerun()
+        # ── SCENE CARDS — FULL WIDTH ─────────────────────────────────────────
+        scenes = active_sb.get("scenes", [])
 
-        with right:
-            scenes = active_sb.get("scenes", [])
-            # Toolbar
-            render_count = 0  # placeholder; real rendering would call image API
+        if not scenes:
+            st.markdown("""
+            <div style="text-align:center;padding:5rem 2rem;color:#334155;
+                        border:1px dashed #1e1e3a;border-radius:16px;margin-top:1.5rem;">
+              <div style="font-size:3rem;margin-bottom:0.75rem;">🎞</div>
+              <div style="font-size:16px;font-weight:600;color:#475569;">No scenes yet</div>
+              <div style="font-size:13px;margin-top:0.4rem;">Open the controls above, paste your content and hit Generate.</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            # Header bar
             st.markdown(f"""
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-                <div style="font-size:13px; font-weight:600; color:#64748b; letter-spacing:0.08em; text-transform:uppercase;">Storyboard — {active_sb['name']}</div>
-                <div style="font-size:12px; color:#475569; font-family:'JetBrains Mono',monospace;">
-                    {len(scenes)} Scenes · {render_count} Rendered
-                </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        padding:0.75rem 1.25rem;background:#0d0d1a;border:1px solid #1e1e3a;
+                        border-radius:12px;margin:1rem 0 1.25rem 0;">
+              <div style="font-size:13px;font-weight:700;color:#e2e8f0;letter-spacing:0.06em;">
+                📋 {active_sb['name']}
+              </div>
+              <div style="font-size:12px;color:#475569;font-family:'JetBrains Mono',monospace;">
+                {len(scenes)} SCENE{'S' if len(scenes)!=1 else ''}
+              </div>
             </div>
             """, unsafe_allow_html=True)
 
-            if not scenes:
-                st.markdown("""
-                <div style="text-align:center; padding:4rem; color:#334155; border:1px dashed #1e1e3a; border-radius:12px;">
-                    <div style="font-size:2rem;">🎞</div>
-                    <div style="margin-top:0.5rem; font-size:14px;">No scenes yet. Generate or import to begin.</div>
+            for i, sc in enumerate(scenes):
+                assets  = get_scene_assets(sc)
+                labels  = sc.get("labels", [])
+                anim    = sc.get("animation", "").strip()
+                vd      = sc.get("visual_description", "").strip()
+                narr    = sc.get("narration", "").strip()
+                snum    = sc.get("scene_number", i + 1)
+                title   = sc.get("title", "Untitled")
+
+                # ── SCENE NUMBER + TITLE HEADER ──────────────────────────────
+                st.markdown(f"""
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:0.6rem;">
+                  <div style="background:linear-gradient(135deg,#2563eb,#7c3aed);
+                              color:white;font-size:11px;font-weight:800;
+                              letter-spacing:0.14em;padding:5px 14px;border-radius:20px;
+                              font-family:'JetBrains Mono',monospace;white-space:nowrap;">
+                    SCENE {snum:02d}
+                  </div>
+                  <div style="font-size:16px;font-weight:700;color:#f1f5f9;letter-spacing:0.02em;">
+                    {title}
+                  </div>
                 </div>
                 """, unsafe_allow_html=True)
-            else:
-                # Frame grid — 1 per row for full detail display
-                for sc in scenes:
-                    assets = get_scene_assets(sc)
-                    labels = sc.get("labels", [])
-                    animation = sc.get("animation", "—")
-                    visual_desc = sc.get("visual_description", "")
-                    narration = sc.get("narration", "")
 
-                    assets_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets]) or '<span style="color:#334155;">None</span>'
-                    labels_html = " ".join([f'<span class="scene-tag" style="background:#1a2e1a; color:#4ade80;">{l}</span>' for l in labels]) or '<span style="color:#334155;">None</span>'
+                # ── ROW 1: ASSETS | LABELS | NARRATION ──────────────────────
+                col_a, col_b, col_n = st.columns([1, 1, 2])
 
-                    # Format animation steps — preserve newlines as <br>
-                    anim_lines = animation.replace("\r\n", "\n").split("\n")
-                    anim_html = "".join([
-                        f'<div style="display:flex; gap:8px; margin-bottom:5px;">'
-                        f'<span style="color:#f59e0b; font-family:JetBrains Mono,monospace; font-size:11px; min-width:14px;">'
-                        f'{"•" if not line.strip()[:1].isdigit() else ""}</span>'
-                        f'<span style="font-size:12px; color:#cbd5e1; line-height:1.5;">{line.strip()}</span>'
-                        f'</div>'
-                        for line in anim_lines if line.strip()
-                    ])
-
+                with col_a:
+                    asset_tags = "".join([
+                        f'<span style="display:inline-block;margin:2px 3px 2px 0;padding:3px 9px;'
+                        f'border-radius:5px;background:#0f1f3d;color:#60a5fa;font-size:11px;'
+                        f'font-weight:600;font-family:JetBrains Mono,monospace;">{a}</span>'
+                        for a in assets
+                    ]) or '<span style="color:#334155;font-size:12px;">—</span>'
                     st.markdown(f"""
-                    <div class="frame-card" style="margin-bottom:1.25rem; border-radius:14px; overflow:hidden;">
-
-                      <!-- Header -->
-                      <div style="display:flex; align-items:center; justify-content:space-between;
-                                  padding:0.65rem 1rem; border-bottom:1px solid #1e1e3a; background:#0d0d1a;">
-                        <span style="font-size:10px; font-weight:700; letter-spacing:0.14em;
-                                     color:#475569; font-family:'JetBrains Mono',monospace;">
-                          SCENE {sc.get('scene_number','?'):02d}
-                        </span>
-                        <span style="font-size:13px; font-weight:700; color:#e2e8f0;">
-                          {sc.get('title','Untitled')}
-                        </span>
+                    <div style="background:#0d1117;border:1px solid #1e3a5f;border-radius:10px;
+                                padding:0.85rem 1rem;height:100%;">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:0.15em;
+                                  color:#3b82f6;text-transform:uppercase;margin-bottom:8px;">
+                        🔷 Required 3D Assets
                       </div>
+                      <div style="line-height:1.8;">{asset_tags}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                      <!-- Body: 5 columns -->
-                      <div style="display:grid; grid-template-columns:1fr 1fr 2fr 2fr 2fr;
-                                  gap:0; border-bottom:1px solid #1e1e3a;">
+                with col_b:
+                    label_tags = "".join([
+                        f'<span style="display:inline-block;margin:2px 3px 2px 0;padding:3px 9px;'
+                        f'border-radius:5px;background:#0f2d1a;color:#4ade80;font-size:11px;'
+                        f'font-weight:600;">{l}</span>'
+                        for l in labels
+                    ]) or '<span style="color:#334155;font-size:12px;">—</span>'
+                    st.markdown(f"""
+                    <div style="background:#0d1a12;border:1px solid #1a3d25;border-radius:10px;
+                                padding:0.85rem 1rem;height:100%;">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:0.15em;
+                                  color:#4ade80;text-transform:uppercase;margin-bottom:8px;">
+                        🟢 Labels (UI Text)
+                      </div>
+                      <div style="line-height:1.8;">{label_tags}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                        <!-- Col 1: Required 3D Assets -->
-                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
-                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
-                                      color:#3b82f6; text-transform:uppercase; margin-bottom:8px;">
-                            Required 3D Assets
-                          </div>
-                          <div style="display:flex; flex-direction:column; gap:4px;">
-                            {" ".join([f'<span class="scene-tag" style="display:inline-block; margin-bottom:3px;">{a}</span>' for a in assets]) or '<span style="color:#334155; font-size:11px;">—</span>'}
-                          </div>
-                        </div>
-
-                        <!-- Col 2: Labels (UI Text) -->
-                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
-                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
-                                      color:#4ade80; text-transform:uppercase; margin-bottom:8px;">
-                            Labels (UI Text)
-                          </div>
-                          <div style="display:flex; flex-direction:column; gap:4px;">
-                            {" ".join([f'<span class="scene-tag" style="display:inline-block; margin-bottom:3px; background:#1a2e1a; color:#4ade80;">{l}</span>' for l in labels]) or '<span style="color:#334155; font-size:11px;">—</span>'}
-                          </div>
-                        </div>
-
-                        <!-- Col 3: Animation Logic -->
-                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
-                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
-                                      color:#f59e0b; text-transform:uppercase; margin-bottom:8px;">
-                            Animation Logic (GLB Safe)
-                          </div>
-                          <div>{anim_html}</div>
-                        </div>
-
-                        <!-- Col 4: Visual Description -->
-                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
-                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
-                                      color:#a78bfa; text-transform:uppercase; margin-bottom:8px;">
-                            Visual Description
-                          </div>
-                          <div style="font-size:12px; color:#94a3b8; line-height:1.6;">
-                            {visual_desc}
-                          </div>
-                        </div>
-
-                        <!-- Col 5: Narration -->
-                        <div style="padding:0.85rem 0.9rem;">
-                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
-                                      color:#fb7185; text-transform:uppercase; margin-bottom:8px;">
-                            Narration
-                          </div>
-                          <div style="font-size:12px; color:#e2e8f0; line-height:1.7;
-                                      font-style:italic; border-left:2px solid #fb7185;
-                                      padding-left:10px;">
-                            {narration}
-                          </div>
-                        </div>
-
+                with col_n:
+                    st.markdown(f"""
+                    <div style="background:#1a0d1a;border:1px solid #3d1a2e;border-radius:10px;
+                                padding:0.85rem 1rem;height:100%;border-left:3px solid #fb7185;">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:0.15em;
+                                  color:#fb7185;text-transform:uppercase;margin-bottom:8px;">
+                        🎙 Narration
+                      </div>
+                      <div style="font-size:13px;color:#f1f5f9;line-height:1.75;font-style:italic;">
+                        {narr if narr else '—'}
                       </div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+                # ── ROW 2: ANIMATION | VISUAL DESCRIPTION ───────────────────
+                col_anim, col_vd = st.columns([1, 1])
+
+                with col_anim:
+                    # Format animation as numbered steps
+                    anim_lines = [l.strip() for l in anim.replace("\r\n", "\n").split("\n") if l.strip()]
+                    steps_html = "".join([
+                        f'<div style="display:flex;gap:10px;margin-bottom:6px;align-items:flex-start;">'
+                        f'<span style="min-width:20px;height:20px;border-radius:50%;'
+                        f'background:linear-gradient(135deg,#d97706,#f59e0b);color:#000;'
+                        f'font-size:10px;font-weight:800;display:flex;align-items:center;'
+                        f'justify-content:center;flex-shrink:0;margin-top:1px;">'
+                        f'{idx+1 if not line[:1].isdigit() else line[:1]}</span>'
+                        f'<span style="font-size:12px;color:#fde68a;line-height:1.55;">'
+                        f'{line.lstrip("0123456789. ") if line[:1].isdigit() else line}</span>'
+                        f'</div>'
+                        for idx, line in enumerate(anim_lines)
+                    ]) or '<span style="color:#334155;font-size:12px;">—</span>'
+                    st.markdown(f"""
+                    <div style="background:#1a1400;border:1px solid #3d2e00;border-radius:10px;
+                                padding:0.85rem 1rem;border-left:3px solid #f59e0b;">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:0.15em;
+                                  color:#f59e0b;text-transform:uppercase;margin-bottom:10px;">
+                        ⚡ Animation Logic (GLB Safe)
+                      </div>
+                      <div>{steps_html}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                with col_vd:
+                    st.markdown(f"""
+                    <div style="background:#120d1a;border:1px solid #2d1a4a;border-radius:10px;
+                                padding:0.85rem 1rem;border-left:3px solid #a78bfa;">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:0.15em;
+                                  color:#a78bfa;text-transform:uppercase;margin-bottom:8px;">
+                        🎨 Visual Description
+                      </div>
+                      <div style="font-size:13px;color:#c4b5fd;line-height:1.7;">
+                        {vd if vd else '—'}
+                      </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # ── DELETE BUTTON + DIVIDER ──────────────────────────────────
+                st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+                _, del_col = st.columns([6, 1])
+                with del_col:
+                    if st.button(f"🗑 Delete", key=f"del_scene_{i}", use_container_width=True):
+                        st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"].pop(i)
+                        st.rerun()
+
+                st.markdown("""
+                <div style="height:1px;background:linear-gradient(90deg,#2563eb22,#7c3aed44,#2563eb22);
+                            margin:1rem 0 1.5rem 0;border-radius:2px;"></div>
+                """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════
 # TAB 3 — EXPORT / IMPORT
