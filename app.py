@@ -255,6 +255,14 @@ def get_active_storyboard():
         return proj["storyboards"].get(sb_id)
     return None
 
+def get_scene_assets(sc):
+    """
+    Unified helper to read assets from a scene dict.
+    Priority: 'assets' > 'required_assets' > 'models_3d'
+    Always returns a list.
+    """
+    return sc.get("assets", sc.get("required_assets", sc.get("models_3d", [])))
+
 def generate_scenes_groq(text, num_scenes):
     if not GROQ_API_KEY:
         st.error("⚠️ Add `GROQ_API_KEY` to Streamlit Secrets to enable generation.")
@@ -270,7 +278,7 @@ def generate_scenes_groq(text, num_scenes):
                     f"Convert input into EXACTLY {num_scenes} scenes. "
                     "Return ONLY a valid JSON array (no markdown, no explanation). "
                     "Each item: {\"scene_number\": int, \"title\": str, \"narration\": str, "
-                    "\"context\": str, \"required_assets\": [str], \"animation\": str, \"visual_description\": str}"
+                    "\"context\": str, \"assets\": [str], \"animation\": str, \"visual_description\": str}"
                 )
             },
             {"role": "user", "content": f"Create a detailed 3D storyboard for: {text}"}
@@ -282,13 +290,27 @@ def generate_scenes_groq(text, num_scenes):
         if resp.status_code == 200:
             raw = resp.json()["choices"][0]["message"]["content"]
             raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-            return json.loads(raw)
+            scenes = json.loads(raw)
+            # Normalise: ensure every scene uses 'assets' key
+            for sc in scenes:
+                if "assets" not in sc:
+                    sc["assets"] = sc.pop("required_assets", sc.pop("models_3d", []))
+            return scenes
         else:
             st.error(f"Groq API error {resp.status_code}")
             return None
     except Exception as e:
         st.error(f"Generation failed: {e}")
         return None
+
+def normalise_scenes(scenes):
+    """
+    Migrate imported / legacy scenes so every scene has an 'assets' key.
+    """
+    for sc in scenes:
+        if "assets" not in sc:
+            sc["assets"] = sc.pop("required_assets", sc.pop("models_3d", []))
+    return scenes
 
 # ─── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -400,22 +422,22 @@ with tabs[0]:
             if import_file:
                 try:
                     imported = json.load(import_file)
+                    sbid = str(uuid.uuid4())
                     # Accept either a storyboard dict or raw scenes list
                     if isinstance(imported, list):
-                        sbid = str(uuid.uuid4())
+                        imported_scenes = normalise_scenes(imported)
                         st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
                             "name": import_file.name.replace(".json", ""),
                             "created": datetime.now().strftime("%b %d, %Y"),
-                            "scenes": imported
+                            "scenes": imported_scenes
                         }
                     elif isinstance(imported, dict) and "scenes" in imported:
-                        sbid = str(uuid.uuid4())
+                        imported_scenes = normalise_scenes(imported["scenes"])
                         st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
                             "name": imported.get("name", import_file.name.replace(".json", "")),
                             "created": datetime.now().strftime("%b %d, %Y"),
-                            "scenes": imported["scenes"]
+                            "scenes": imported_scenes
                         }
-                        sbid = sbid
                     st.session_state.active_storyboard = sbid
                     st.success("Storyboard imported!")
                     st.rerun()
@@ -511,10 +533,10 @@ with tabs[1]:
                 for i, sc in enumerate(scenes):
                     with st.expander(f"Scene {sc.get('scene_number', i+1)}: {sc.get('title', 'Untitled')}"):
                         st.markdown(f'<div class="scene-narration">🎙 {sc.get("narration","")}</div>', unsafe_allow_html=True)
-                        assets = sc.get("required_assets", sc.get("models_3d", []))
+                        assets = get_scene_assets(sc)
                         if assets:
                             tags_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets])
-                            st.markdown(f'<div style="margin-top:4px; font-size:10px; color:#475569; font-weight:600; text-transform:uppercase; letter-spacing:0.1em;">Required Assets</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="margin-top:4px; font-size:10px; color:#475569; font-weight:600; text-transform:uppercase; letter-spacing:0.1em;">Assets</div>', unsafe_allow_html=True)
                             st.markdown(f'<div class="scene-tags">{tags_html}</div>', unsafe_allow_html=True)
                         st.caption(f"Animation: {sc.get('animation','—')}")
                         # Delete individual scene
@@ -549,7 +571,7 @@ with tabs[1]:
                     cols = st.columns(3)
                     for col, sc in zip(cols, row):
                         with col:
-                            assets = sc.get("required_assets", sc.get("models_3d", []))
+                            assets = get_scene_assets(sc)
                             tags_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets[:3]])
                             st.markdown(f"""
                             <div class="frame-card">
@@ -581,7 +603,23 @@ with tabs[2]:
         with col_exp:
             st.markdown('<div class="card-title">Export</div>', unsafe_allow_html=True)
             if scenes:
-                export_payload = {"name": active_sb["name"], "created": active_sb.get("created",""), "scenes": scenes}
+                # ── Build export payload: normalise every scene to use 'assets' key ──
+                export_scenes = []
+                for sc in scenes:
+                    sc_export = dict(sc)
+                    # Ensure the exported key is always 'assets'
+                    if "assets" not in sc_export:
+                        sc_export["assets"] = sc_export.pop("required_assets", sc_export.pop("models_3d", []))
+                    # Remove legacy keys if present alongside 'assets'
+                    sc_export.pop("required_assets", None)
+                    sc_export.pop("models_3d", None)
+                    export_scenes.append(sc_export)
+
+                export_payload = {
+                    "name": active_sb["name"],
+                    "created": active_sb.get("created", ""),
+                    "scenes": export_scenes
+                }
                 st.download_button(
                     label="📥 Download Storyboard JSON",
                     data=json.dumps(export_payload, indent=2),
@@ -592,10 +630,13 @@ with tabs[2]:
                 # Markdown table preview
                 st.markdown("---")
                 st.markdown("**Scene Table Preview**")
-                header = "| # | Title | Narration | Required Assets | Animation |"
-                sep    = "|---|-------|-----------|-----------------|-----------|"
-                rows   = [f"| {s.get('scene_number','?')} | {s.get('title','')} | {s.get('narration','')[:60]} | {', '.join(s.get('required_assets', s.get('models_3d', [])))} | {s.get('animation','')} |" for s in scenes]
-                st.markdown("\n".join([header, sep] + rows))
+                header = "| # | Title | Narration | Assets | Animation |"
+                sep    = "|---|-------|-----------|--------|-----------|"
+                rows_md = [
+                    f"| {s.get('scene_number','?')} | {s.get('title','')} | {s.get('narration','')[:60]} | {', '.join(get_scene_assets(s))} | {s.get('animation','')} |"
+                    for s in scenes
+                ]
+                st.markdown("\n".join([header, sep] + rows_md))
             else:
                 st.info("No scenes to export yet.")
 
@@ -607,9 +648,9 @@ with tabs[2]:
                 try:
                     data = json.load(imp)
                     if isinstance(data, list):
-                        imported_scenes = data
+                        imported_scenes = normalise_scenes(data)
                     elif isinstance(data, dict) and "scenes" in data:
-                        imported_scenes = data["scenes"]
+                        imported_scenes = normalise_scenes(data["scenes"])
                     else:
                         st.error("Unrecognized format.")
                         imported_scenes = []
