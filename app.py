@@ -270,7 +270,7 @@ def generate_scenes_groq(text, num_scenes):
                     f"Convert input into EXACTLY {num_scenes} scenes. "
                     "Return ONLY a valid JSON array (no markdown, no explanation). "
                     "Each item: {\"scene_number\": int, \"title\": str, \"narration\": str, "
-                    "\"context\": str, \"models_3d\": [str], \"animation\": str, \"visual_description\": str}"
+                    "\"context\": str, \"required_assets\": [str], \"animation\": str, \"visual_description\": str}"
                 )
             },
             {"role": "user", "content": f"Create a detailed 3D storyboard for: {text}"}
@@ -511,9 +511,10 @@ with tabs[1]:
                 for i, sc in enumerate(scenes):
                     with st.expander(f"Scene {sc.get('scene_number', i+1)}: {sc.get('title', 'Untitled')}"):
                         st.markdown(f'<div class="scene-narration">🎙 {sc.get("narration","")}</div>', unsafe_allow_html=True)
-                        models = sc.get("models_3d", [])
-                        if models:
-                            tags_html = " ".join([f'<span class="scene-tag">{m}</span>' for m in models])
+                        assets = sc.get("required_assets", sc.get("models_3d", []))
+                        if assets:
+                            tags_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets])
+                            st.markdown(f'<div style="margin-top:4px; font-size:10px; color:#475569; font-weight:600; text-transform:uppercase; letter-spacing:0.1em;">Required Assets</div>', unsafe_allow_html=True)
                             st.markdown(f'<div class="scene-tags">{tags_html}</div>', unsafe_allow_html=True)
                         st.caption(f"Animation: {sc.get('animation','—')}")
                         # Delete individual scene
@@ -548,8 +549,8 @@ with tabs[1]:
                     cols = st.columns(3)
                     for col, sc in zip(cols, row):
                         with col:
-                            models = sc.get("models_3d", [])
-                            tags_html = " ".join([f'<span class="scene-tag">{m}</span>' for m in models[:3]])
+                            assets = sc.get("required_assets", sc.get("models_3d", []))
+                            tags_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets[:3]])
                             st.markdown(f"""
                             <div class="frame-card">
                                 <div class="frame-label">FRAME {sc.get('scene_number', '?'):02d}</div>
@@ -591,9 +592,9 @@ with tabs[2]:
                 # Markdown table preview
                 st.markdown("---")
                 st.markdown("**Scene Table Preview**")
-                header = "| # | Title | Narration | 3D Models | Animation |"
-                sep    = "|---|-------|-----------|-----------|-----------|"
-                rows   = [f"| {s.get('scene_number','?')} | {s.get('title','')} | {s.get('narration','')[:60]} | {', '.join(s.get('models_3d',[]))} | {s.get('animation','')} |" for s in scenes]
+                header = "| # | Title | Narration | Required Assets | Animation |"
+                sep    = "|---|-------|-----------|-----------------|-----------|"
+                rows   = [f"| {s.get('scene_number','?')} | {s.get('title','')} | {s.get('narration','')[:60]} | {', '.join(s.get('required_assets', s.get('models_3d', [])))} | {s.get('animation','')} |" for s in scenes]
                 st.markdown("\n".join([header, sep] + rows))
             else:
                 st.info("No scenes to export yet.")
