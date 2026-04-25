@@ -745,7 +745,8 @@ with tabs[2]:
                     f"| {s.get('scene_number','?')} | {s.get('title','')} | {', '.join(get_scene_assets(s))} | {', '.join(s.get('labels',[]))} | {s.get('animation','')[:60]}… | {s.get('visual_description','')[:60]}… | {s.get('narration','')[:80]}… |"
                     for s in scenes
                 ]
-                st.markdown("\n".join([header, sep] + rows_md))            else:
+                st.markdown("\n".join([header, sep] + rows_md))
+            else:
                 st.info("No scenes to export yet.")
 
         with col_imp:
