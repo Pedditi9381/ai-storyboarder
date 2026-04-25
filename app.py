@@ -2,132 +2,770 @@ import streamlit as st
 import requests
 import PyPDF2
 import json
+import uuid
+from datetime import datetime
 
-# --- 1. PAGE CONFIG ---
-st.set_page_config(page_title="LearningPad | 3D Asset Director", layout="wide")
+# ─── PAGE CONFIG ───────────────────────────────────────────────────────────────
+st.set_page_config(page_title="LPVision Studio", layout="wide", page_icon="🎬")
 
-# Custom UI Styling
+# ─── GLOBAL CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
-    <style>
-    .main { background-color: #0f172a; color: #f8fafc; }
-    .stButton>button { 
-        width: 100%; border-radius: 12px; height: 3.5em; 
-        background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
-        color: white; font-weight: 700; border: none;
-    }
-    .stTextArea textarea { background-color: #1e293b; color: #f1f5f9; border-radius: 12px; }
-    .stSlider [data-baseweb="slider"] { color: #3b82f6; }
-    /* JSON Download Button Styling */
-    .stDownloadButton>button {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
-# --- 2. API CONFIG ---
+/* Reset & Base */
+html, body, [class*="css"] { font-family: 'Space Grotesk', sans-serif; }
+.main { background-color: #09090f; color: #e2e8f0; }
+.block-container { padding: 0 !important; max-width: 100% !important; }
+section[data-testid="stSidebar"] { background: #0d0d1a; border-right: 1px solid #1e1e3a; width: 260px !important; }
+section[data-testid="stSidebar"] .block-container { padding: 1rem !important; }
+
+/* Hide default Streamlit chrome */
+#MainMenu, footer, header { visibility: hidden; }
+
+/* Sidebar branding */
+.sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0.5rem 0 1.5rem 0; border-bottom: 1px solid #1e1e3a; margin-bottom: 1rem;
+}
+.sidebar-brand .logo {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700;
+}
+.sidebar-brand .brand-text { font-size: 14px; font-weight: 600; color: #94a3b8; letter-spacing: 0.1em; }
+.sidebar-brand .brand-name { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+
+/* Sidebar section labels */
+.sidebar-section {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.15em;
+    color: #475569; text-transform: uppercase; margin: 1.2rem 0 0.5rem 0;
+}
+
+/* Project cards in sidebar */
+.project-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.55rem 0.75rem; border-radius: 8px; cursor: pointer;
+    margin-bottom: 3px; border: 1px solid transparent; transition: all 0.15s;
+}
+.project-item:hover { background: #1e1e3a; border-color: #2d2d5a; }
+.project-item.active { background: #1e2a4a; border-color: #3b82f6; }
+.project-item .proj-name { font-size: 13px; font-weight: 500; color: #cbd5e1; flex: 1; }
+.project-item.active .proj-name { color: #93c5fd; }
+.project-item .proj-count { font-size: 11px; color: #475569; background: #1e1e3a; padding: 2px 6px; border-radius: 4px; }
+
+/* Top bar */
+.topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.85rem 2rem; border-bottom: 1px solid #1e1e3a;
+    background: #09090f; position: sticky; top: 0; z-index: 100;
+}
+.topbar-left { display: flex; align-items: center; gap: 1rem; }
+.topbar-title { font-size: 15px; font-weight: 600; color: #94a3b8; }
+.topbar-story { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+.topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+
+/* Tab nav */
+.tab-nav {
+    display: flex; gap: 1px; border-bottom: 1px solid #1e1e3a;
+    padding: 0 2rem; background: #09090f;
+}
+.tab-btn {
+    padding: 0.75rem 1.25rem; font-size: 13px; font-weight: 500;
+    color: #475569; cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.15s; user-select: none;
+}
+.tab-btn:hover { color: #94a3b8; }
+.tab-btn.active { color: #f1f5f9; border-bottom-color: #3b82f6; }
+
+/* Main content area */
+.content-area { padding: 1.5rem 2rem; }
+
+/* Two-panel layout */
+.panel-row { display: flex; gap: 1.5rem; }
+.panel-left { flex: 0 0 420px; }
+.panel-right { flex: 1; min-width: 0; }
+
+/* Cards */
+.card {
+    background: #111120; border: 1px solid #1e1e3a;
+    border-radius: 12px; padding: 1.25rem;
+}
+.card-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+    color: #475569; text-transform: uppercase; margin-bottom: 1rem;
+}
+
+/* Scene list items */
+.scene-item {
+    padding: 0.75rem; border-radius: 8px; border: 1px solid #1e1e3a;
+    margin-bottom: 0.5rem; cursor: pointer; transition: all 0.15s;
+}
+.scene-item:hover { border-color: #2d2d5a; background: #13132a; }
+.scene-title { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px; }
+.scene-narration { font-size: 12px; color: #64748b; font-style: italic; }
+.scene-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.scene-tag {
+    font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 4px;
+    background: #1e2a4a; color: #60a5fa; font-family: 'JetBrains Mono', monospace;
+}
+
+/* Frame grid */
+.frame-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; }
+.frame-card {
+    background: #111120; border: 1px solid #1e1e3a; border-radius: 12px; overflow: hidden;
+}
+.frame-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #475569;
+    padding: 0.6rem 0.9rem; border-bottom: 1px solid #1e1e3a;
+    font-family: 'JetBrains Mono', monospace;
+}
+.frame-placeholder {
+    height: 160px; display: flex; align-items: center; justify-content: center;
+    background: #0d0d1a; color: #2d2d5a; flex-direction: column; gap: 8px;
+}
+.frame-placeholder svg { opacity: 0.4; }
+.frame-placeholder-text { font-size: 11px; color: #334155; }
+.frame-info { padding: 0.75rem 0.9rem; }
+.frame-scene-title { font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.frame-narration { font-size: 11px; color: #64748b; font-style: italic; margin-bottom: 8px; }
+.frame-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* Toolbar */
+.toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.9rem 2rem; border-bottom: 1px solid #1e1e3a; background: #0d0d1a;
+}
+.toolbar-left { display: flex; align-items: center; gap: 0.75rem; }
+.toolbar-right { font-size: 12px; color: #475569; font-family: 'JetBrains Mono', monospace; }
+
+/* Buttons */
+.stButton>button {
+    background: #1e1e3a !important; color: #94a3b8 !important;
+    border: 1px solid #2d2d5a !important; border-radius: 8px !important;
+    font-size: 13px !important; font-weight: 500 !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    transition: all 0.15s !important;
+}
+.stButton>button:hover {
+    background: #2d2d5a !important; color: #e2e8f0 !important;
+    border-color: #3b4f8a !important;
+}
+
+/* Primary button */
+.primary-btn>button {
+    background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+    color: white !important; border: none !important;
+}
+.primary-btn>button:hover { opacity: 0.9 !important; }
+
+/* Danger button */
+.danger-btn>button {
+    background: #2d1515 !important; color: #f87171 !important;
+    border-color: #4a1a1a !important;
+}
+
+/* Download button */
+.stDownloadButton>button {
+    background: #0f2a1e !important; color: #34d399 !important;
+    border: 1px solid #1a4a33 !important; border-radius: 8px !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+}
+
+/* Input fields */
+.stTextArea textarea {
+    background: #0d0d1a !important; color: #e2e8f0 !important;
+    border: 1px solid #1e1e3a !important; border-radius: 8px !important;
+    font-family: 'Space Grotesk', sans-serif !important; font-size: 13px !important;
+}
+.stTextInput input {
+    background: #0d0d1a !important; color: #e2e8f0 !important;
+    border: 1px solid #1e1e3a !important; border-radius: 8px !important;
+    font-family: 'Space Grotesk', sans-serif !important; font-size: 13px !important;
+}
+.stSelectbox select {
+    background: #0d0d1a !important; color: #e2e8f0 !important;
+}
+label { color: #64748b !important; font-size: 12px !important; font-weight: 500 !important; }
+
+/* Slider */
+.stSlider [data-baseweb="slider"] { color: #3b82f6; }
+
+/* Radio */
+.stRadio label { color: #94a3b8 !important; }
+.stRadio [data-testid="stMarkdownContainer"] p { color: #94a3b8 !important; }
+
+/* Expander */
+.streamlit-expanderHeader { background: #0d0d1a !important; color: #94a3b8 !important; border: 1px solid #1e1e3a !important; border-radius: 8px !important; }
+
+/* File uploader */
+[data-testid="stFileUploadDropzone"] { background: #0d0d1a !important; border: 1px dashed #2d2d5a !important; border-radius: 8px !important; }
+
+/* Divider */
+hr { border-color: #1e1e3a !important; }
+
+/* Alert / info */
+.stAlert { background: #0d0d1a !important; border: 1px solid #1e1e3a !important; border-radius: 8px !important; color: #94a3b8 !important; }
+
+/* Tabs fix */
+.stTabs [data-baseweb="tab-list"] { background: transparent !important; gap: 0; border-bottom: 1px solid #1e1e3a; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: #475569 !important; font-family: 'Space Grotesk', sans-serif !important; font-size: 13px !important; border-bottom: 2px solid transparent !important; }
+.stTabs [aria-selected="true"] { color: #f1f5f9 !important; border-bottom-color: #3b82f6 !important; }
+.stTabs [data-baseweb="tab-panel"] { padding: 1.5rem 0 0 0 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ─── SESSION STATE ─────────────────────────────────────────────────────────────
+def init_state():
+    if "projects" not in st.session_state:
+        default_id = str(uuid.uuid4())
+        st.session_state.projects = {
+            default_id: {
+                "name": "My First Project",
+                "created": datetime.now().strftime("%b %d, %Y"),
+                "storyboards": {}
+            }
+        }
+    if "active_project" not in st.session_state:
+        st.session_state.active_project = list(st.session_state.projects.keys())[0]
+    if "active_storyboard" not in st.session_state:
+        st.session_state.active_storyboard = None
+    if "main_view" not in st.session_state:
+        st.session_state.main_view = "projects"  # "projects" | "storyboard"
+
+init_state()
+
+# ─── API CONFIG ────────────────────────────────────────────────────────────────
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    st.error("Setup Error: Please add 'GROQ_API_KEY' in Streamlit Secrets.")
-    st.stop()
+    GROQ_API_KEY = None
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# --- 3. MAIN UI ---
-st.title("🎬 Custom 3D Scene Director")
-st.write("---")
+# ─── HELPERS ───────────────────────────────────────────────────────────────────
+def get_active_project():
+    return st.session_state.projects.get(st.session_state.active_project, {})
 
-col1, col2 = st.columns([1, 1.8], gap="large")
+def get_active_storyboard():
+    proj = get_active_project()
+    sb_id = st.session_state.active_storyboard
+    if sb_id and "storyboards" in proj:
+        return proj["storyboards"].get(sb_id)
+    return None
 
-with col1:
-    st.subheader("📥 Input & Controls")
-    
-    num_scenes = st.slider("Select Number of Scenes:", min_value=3, max_value=12, value=6)
-    input_type = st.radio("Input Source:", ["Manual Text", "PDF Document"])
-    
-    final_text = ""
-    if input_type == "Manual Text":
-        final_text = st.text_area("Paste Content:", height=250, placeholder="e.g., Working of a Steam Engine...")
+def get_scene_assets(sc):
+    """
+    Unified helper to read assets from a scene dict.
+    Priority: 'assets' > 'required_assets' > 'models_3d'
+    Always returns a list.
+    """
+    return sc.get("assets", sc.get("required_assets", sc.get("models_3d", [])))
+
+def generate_scenes_groq(text, num_scenes):
+    if not GROQ_API_KEY:
+        st.error("⚠️ Add `GROQ_API_KEY` to Streamlit Secrets to enable generation.")
+        return None
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    system_prompt = f"""You are a Senior 3D Instructional Animator and Technical Director specialising in educational explainer videos.
+Convert the input content into EXACTLY {num_scenes} storyboard scenes.
+
+Return ONLY a valid JSON array — no markdown fences, no explanation, no preamble.
+
+Each scene object MUST contain these exact keys:
+
+{{
+  "scene_number": <integer, starting from 1>,
+  "title": "<short scene title, 3-6 words>",
+  "assets": ["<GLB-safe 3D asset name>", ...],
+  "labels": ["<UI text label shown on screen>", ...],
+  "animation": "<Step-by-step animation instructions for a developer. Describe WHAT moves, HOW it moves (translate/rotate/scale/fade/morph), in WHAT ORDER, and WHEN (on load / on click / timed). Be specific and GLB-safe — no shader effects, no cloth physics, no particle systems. Use plain English. Example: '1. Camera pans right to reveal the boiler model. 2. Piston arm rotates 90° clockwise over 1.5s. 3. Steam particle (billboard sprite) fades in above the valve. 4. Arrow label slides up from bottom and holds.'>"
+  "visual_description": "<Rich description of the full 3D scene layout, camera angle, lighting mood, background, foreground elements, depth, colours. 2-3 sentences. Example: 'Wide establishing shot of a cross-section steam engine model centred on a dark navy stage. Warm amber rim-lighting highlights the copper boiler on the left. The camera sits at eye-level, slightly angled upward to convey scale.'>",
+  "narration": "<The exact script a human narrator reads aloud during this scene. Must be educational, clear, engaging and age-appropriate. 2-4 complete sentences. Should explain the concept shown, not just describe what is visible. Example: 'The steam engine works by converting heat energy into mechanical motion. Water inside the boiler is heated until it becomes pressurised steam. That steam is then pushed into a cylinder, forcing the piston to move back and forth — and that movement is what turns the wheels.'>"
+}}
+
+Rules:
+- assets: list of 3-6 short lowercase GLB model names (e.g. "piston_arm", "boiler_tank", "flywheel")
+- labels: list of 2-5 short UI text strings shown as on-screen captions (e.g. "Boiler", "High Pressure Steam", "Condenser")
+- animation: MUST be a numbered step-by-step list. Each step on a new line starting with a number.
+- narration: MUST be full proper sentences. No bullet points. No truncation. Write as if speaking to a student."""
+
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Create a detailed 3D educational storyboard for this topic:\n\n{text}"}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4096
+    }
+    try:
+        resp = requests.post(GROQ_URL, headers=headers, json=payload, timeout=60)
+        if resp.status_code == 200:
+            raw = resp.json()["choices"][0]["message"]["content"]
+            raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+            scenes = json.loads(raw)
+            # Normalise: ensure every scene uses 'assets' key
+            for sc in scenes:
+                if "assets" not in sc:
+                    sc["assets"] = sc.pop("required_assets", sc.pop("models_3d", []))
+            return scenes
+        else:
+            st.error(f"Groq API error {resp.status_code}")
+            return None
+    except Exception as e:
+        st.error(f"Generation failed: {e}")
+        return None
+
+def normalise_scenes(scenes):
+    """
+    Migrate imported / legacy scenes so every scene has an 'assets' key.
+    """
+    for sc in scenes:
+        if "assets" not in sc:
+            sc["assets"] = sc.pop("required_assets", sc.pop("models_3d", []))
+    return scenes
+
+# ─── SIDEBAR ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    # Brand
+    st.markdown("""
+    <div class="sidebar-brand">
+        <div class="logo">LP</div>
+        <div>
+            <div class="brand-text">LPVISION</div>
+            <div class="brand-name">Studio</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # New Project
+    st.markdown('<div class="sidebar-section">Projects</div>', unsafe_allow_html=True)
+    with st.expander("＋ New Project"):
+        new_proj_name = st.text_input("Project name", placeholder="e.g. Biology Chapter 3", key="new_proj_input")
+        if st.button("Create Project", key="create_proj_btn"):
+            if new_proj_name.strip():
+                pid = str(uuid.uuid4())
+                st.session_state.projects[pid] = {
+                    "name": new_proj_name.strip(),
+                    "created": datetime.now().strftime("%b %d, %Y"),
+                    "storyboards": {}
+                }
+                st.session_state.active_project = pid
+                st.session_state.active_storyboard = None
+                st.session_state.main_view = "projects"
+                st.rerun()
+
+    # Project list
+    for pid, proj in st.session_state.projects.items():
+        is_active = pid == st.session_state.active_project
+        sb_count = len(proj.get("storyboards", {}))
+        active_class = "active" if is_active else ""
+        if st.button(
+            f"{'▸ ' if is_active else ''}{proj['name']}  [{sb_count}]",
+            key=f"proj_btn_{pid}",
+            use_container_width=True
+        ):
+            st.session_state.active_project = pid
+            st.session_state.active_storyboard = None
+            st.session_state.main_view = "projects"
+            st.rerun()
+
+    # Delete project
+    if len(st.session_state.projects) > 1:
+        st.markdown("---")
+        with st.expander("🗑 Delete Active Project"):
+            st.warning(f"Delete **{get_active_project().get('name', '')}**? This cannot be undone.")
+            if st.button("Confirm Delete Project", key="del_proj_confirm"):
+                del st.session_state.projects[st.session_state.active_project]
+                st.session_state.active_project = list(st.session_state.projects.keys())[0]
+                st.session_state.active_storyboard = None
+                st.session_state.main_view = "projects"
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown('<div style="font-size:11px; color:#334155; text-align:center;">© 2026 LearningPad</div>', unsafe_allow_html=True)
+
+# ─── MAIN AREA ─────────────────────────────────────────────────────────────────
+proj = get_active_project()
+proj_name = proj.get("name", "Untitled Project")
+storyboards = proj.get("storyboards", {})
+active_sb = get_active_storyboard()
+active_sb_id = st.session_state.active_storyboard
+
+# ── TOP BAR
+sb_title = active_sb["name"] if active_sb else "—"
+st.markdown(f"""
+<div class="topbar">
+    <div class="topbar-left">
+        <span class="topbar-title">{proj_name}</span>
+        <span style="color:#334155;">›</span>
+        <span class="topbar-story">{sb_title if active_sb else 'Select a Storyboard'}</span>
+    </div>
+    <div class="topbar-right" style="font-size:12px; color:#475569;">
+        {len(storyboards)} storyboard{'s' if len(storyboards)!=1 else ''}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── TABS
+tabs = st.tabs(["📋 Storyboards", "🎬 Editor", "📦 Export / Import"])
+
+# ════════════════════════════════════════════════════════════
+# TAB 1 — STORYBOARD LIST
+# ════════════════════════════════════════════════════════════
+with tabs[0]:
+    col_actions, col_spacer = st.columns([3, 5])
+    with col_actions:
+        new_sb_name = st.text_input("New storyboard name", placeholder="Untitled Storyboard", key="new_sb_name")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("＋ New Storyboard", key="new_sb_btn", use_container_width=True):
+                name = new_sb_name.strip() or f"Storyboard {len(storyboards)+1}"
+                sbid = str(uuid.uuid4())
+                st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
+                    "name": name,
+                    "created": datetime.now().strftime("%b %d, %Y"),
+                    "scenes": []
+                }
+                st.session_state.active_storyboard = sbid
+                st.rerun()
+        with c2:
+            # Import JSON storyboard
+            import_file = st.file_uploader("Import JSON", type=["json"], key="import_sb", label_visibility="collapsed")
+            if import_file:
+                try:
+                    imported = json.load(import_file)
+                    sbid = str(uuid.uuid4())
+                    # Accept either a storyboard dict or raw scenes list
+                    if isinstance(imported, list):
+                        imported_scenes = normalise_scenes(imported)
+                        st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
+                            "name": import_file.name.replace(".json", ""),
+                            "created": datetime.now().strftime("%b %d, %Y"),
+                            "scenes": imported_scenes
+                        }
+                    elif isinstance(imported, dict) and "scenes" in imported:
+                        imported_scenes = normalise_scenes(imported["scenes"])
+                        st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
+                            "name": imported.get("name", import_file.name.replace(".json", "")),
+                            "created": datetime.now().strftime("%b %d, %Y"),
+                            "scenes": imported_scenes
+                        }
+                    st.session_state.active_storyboard = sbid
+                    st.success("Storyboard imported!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Import failed: {e}")
+
+    st.markdown("---")
+    if not storyboards:
+        st.markdown('<div style="text-align:center; padding:3rem; color:#334155;">No storyboards yet. Create one above.</div>', unsafe_allow_html=True)
     else:
-        uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"])
-        if uploaded_pdf:
-            pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
-            for page in pdf_reader.pages:
-                final_text += page.extract_text()
-            st.success("PDF Content Extracted!")
+        for sbid, sb in storyboards.items():
+            n_scenes = len(sb.get("scenes", []))
+            is_open = sbid == active_sb_id
+            col_info, col_open, col_del = st.columns([6, 1.5, 1])
+            with col_info:
+                st.markdown(f"""
+                <div style="padding: 0.6rem 0;">
+                    <div style="font-size:14px; font-weight:600; color:{'#93c5fd' if is_open else '#e2e8f0'};">
+                        {'▸ ' if is_open else ''}{sb['name']}
+                    </div>
+                    <div style="font-size:12px; color:#475569;">{sb.get('created','')} · {n_scenes} scene{'s' if n_scenes!=1 else ''}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_open:
+                if st.button("Open", key=f"open_{sbid}", use_container_width=True):
+                    st.session_state.active_storyboard = sbid
+                    st.rerun()
+            with col_del:
+                if st.button("🗑", key=f"del_{sbid}", use_container_width=True):
+                    del st.session_state.projects[st.session_state.active_project]["storyboards"][sbid]
+                    if active_sb_id == sbid:
+                        st.session_state.active_storyboard = None
+                    st.rerun()
+            st.markdown('<hr style="margin:0; border-color:#1e1e3a;">', unsafe_allow_html=True)
 
-    generate_btn = st.button(f"🚀 GENERATE {num_scenes} SCENES")
+# ════════════════════════════════════════════════════════════
+# TAB 2 — EDITOR
+# ════════════════════════════════════════════════════════════
+with tabs[1]:
+    if not active_sb:
+        st.info("Open or create a storyboard from the **Storyboards** tab to start editing.")
+    else:
+        left, right = st.columns([1, 1.8], gap="large")
 
-with col2:
-    st.subheader(f"📋 {num_scenes}-Scene Production Brief")
-    
-    if generate_btn and final_text:
-        with st.spinner(f"Groq is designing {num_scenes} scenes and structuring JSON..."):
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            
-            # System prompt strictly asks for Table AND JSON format
-            payload = {
-                "model": "llama-3.1-8b-instant",
-                "messages": [
-                    {
-                        "role": "system", 
-                        "content": (
-                            f"You are a Senior 3D Technical Director. "
-                            f"Task: Convert input into EXACTLY {num_scenes} scenes. "
-                            "Step 1: Output a Markdown table with columns: "
-                            "Scene # | Required 3D Assets | Labels (UI Text) | Animation Logic (GLB Safe) | Visual Description | Narration. "
-                            "Step 2: Provide the same data in a valid JSON block at the end, wrapped in ```json tags."
-                        )
-                    },
-                    {
-                        "role": "user", 
-                        "content": f"Create a detailed 3D storyboard for: {final_text}"
-                    }
-                ],
-                "temperature": 0.2
-            }
-            
-            try:
-                response = requests.post(GROQ_URL, headers=headers, json=payload)
-                if response.status_code == 200:
-                    result_text = response.json()['choices'][0]['message']['content']
-                    
-                    # Splitting Table and JSON for clean display
-                    if "```json" in result_text:
-                        table_part = result_text.split("```json")[0]
-                        json_part = result_text.split("```json")[1].split("```")[0].strip()
-                        
-                        # Display Table
-                        st.markdown(table_part)
-                        
-                        # Export JSON Button
-                        st.write("---")
-                        st.subheader("📦 Production Export")
-                        st.download_button(
-                            label="📥 DOWNLOAD STORYBOARD JSON",
-                            data=json_part,
-                            file_name="learningpad_storyboard.json",
-                            mime="application/json"
-                        )
+        with left:
+            st.markdown('<div class="card-title">Input & Controls</div>', unsafe_allow_html=True)
+            num_scenes = st.slider("Number of Scenes", min_value=3, max_value=12, value=6, key="num_scenes_slider")
+            input_type = st.radio("Input Source", ["Plain Text", "PDF Document"], horizontal=True, key="input_type_radio")
+
+            final_text = ""
+            if input_type == "Plain Text":
+                final_text = st.text_area(
+                    "Paste content here",
+                    height=220,
+                    placeholder="e.g., Working of a Steam Engine, steps of photosynthesis...",
+                    key="plain_text_input"
+                )
+                st.markdown(f'<div style="font-size:11px; color:#475569; text-align:right;">{len(final_text)} chars</div>', unsafe_allow_html=True)
+            else:
+                uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_uploader")
+                if uploaded_pdf:
+                    pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
+                    for page in pdf_reader.pages:
+                        final_text += (page.extract_text() or "")
+                    st.success(f"PDF extracted · {len(final_text)} chars")
+
+            st.markdown("---")
+            gen_col, clear_col = st.columns(2)
+            with gen_col:
+                generate_btn = st.button(f"🚀 Generate {num_scenes} Scenes", key="gen_btn", use_container_width=True)
+            with clear_col:
+                clear_btn = st.button("✕ Clear Scenes", key="clear_btn", use_container_width=True)
+
+            if clear_btn and active_sb_id:
+                st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"] = []
+                st.rerun()
+
+            if generate_btn and final_text:
+                with st.spinner(f"Generating {num_scenes} scenes with Groq..."):
+                    scenes = generate_scenes_groq(final_text, num_scenes)
+                    if scenes:
+                        st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"] = scenes
+                        st.success(f"✓ {len(scenes)} scenes generated!")
+                        st.rerun()
+            elif generate_btn and not final_text:
+                st.warning("Add some content first.")
+
+            # Scene list (editable)
+            scenes = active_sb.get("scenes", [])
+            if scenes:
+                st.markdown("---")
+                st.markdown('<div class="card-title">Scene List</div>', unsafe_allow_html=True)
+                for i, sc in enumerate(scenes):
+                    with st.expander(f"Scene {sc.get('scene_number', i+1)}: {sc.get('title', 'Untitled')}"):
+                        # Narration
+                        st.markdown(f"""
+                        <div style="font-size:9px;font-weight:700;color:#fb7185;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Narration</div>
+                        <div style="font-size:12px;color:#e2e8f0;font-style:italic;border-left:2px solid #fb7185;padding-left:8px;line-height:1.6;margin-bottom:10px;">{sc.get('narration','—')}</div>
+                        """, unsafe_allow_html=True)
+                        # Assets
+                        assets = get_scene_assets(sc)
+                        if assets:
+                            tags_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets])
+                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Required 3D Assets</div><div class="scene-tags" style="margin-bottom:10px;">{tags_html}</div>', unsafe_allow_html=True)
+                        # Labels
+                        labels = sc.get("labels", [])
+                        if labels:
+                            lbl_html = " ".join([f'<span class="scene-tag" style="background:#1a2e1a;color:#4ade80;">{l}</span>' for l in labels])
+                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#4ade80;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Labels (UI Text)</div><div class="scene-tags" style="margin-bottom:10px;">{lbl_html}</div>', unsafe_allow_html=True)
+                        # Animation
+                        anim = sc.get("animation", "")
+                        if anim:
+                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Animation Logic</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="font-size:12px;color:#cbd5e1;background:#0d0d1a;border:1px solid #1e1e3a;border-radius:6px;padding:8px;white-space:pre-wrap;font-family:JetBrains Mono,monospace;line-height:1.6;margin-bottom:10px;">{anim}</div>', unsafe_allow_html=True)
+                        # Visual Description
+                        vd = sc.get("visual_description", "")
+                        if vd:
+                            st.markdown(f'<div style="font-size:9px;font-weight:700;color:#a78bfa;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Visual Description</div><div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:10px;">{vd}</div>', unsafe_allow_html=True)
+                        # Delete
+                        if st.button(f"Delete Scene {i+1}", key=f"del_scene_{i}"):
+                            st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"].pop(i)
+                            st.rerun()
+
+        with right:
+            scenes = active_sb.get("scenes", [])
+            # Toolbar
+            render_count = 0  # placeholder; real rendering would call image API
+            st.markdown(f"""
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                <div style="font-size:13px; font-weight:600; color:#64748b; letter-spacing:0.08em; text-transform:uppercase;">Storyboard — {active_sb['name']}</div>
+                <div style="font-size:12px; color:#475569; font-family:'JetBrains Mono',monospace;">
+                    {len(scenes)} Scenes · {render_count} Rendered
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if not scenes:
+                st.markdown("""
+                <div style="text-align:center; padding:4rem; color:#334155; border:1px dashed #1e1e3a; border-radius:12px;">
+                    <div style="font-size:2rem;">🎞</div>
+                    <div style="margin-top:0.5rem; font-size:14px;">No scenes yet. Generate or import to begin.</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # Frame grid — 1 per row for full detail display
+                for sc in scenes:
+                    assets = get_scene_assets(sc)
+                    labels = sc.get("labels", [])
+                    animation = sc.get("animation", "—")
+                    visual_desc = sc.get("visual_description", "")
+                    narration = sc.get("narration", "")
+
+                    assets_html = " ".join([f'<span class="scene-tag">{a}</span>' for a in assets]) or '<span style="color:#334155;">None</span>'
+                    labels_html = " ".join([f'<span class="scene-tag" style="background:#1a2e1a; color:#4ade80;">{l}</span>' for l in labels]) or '<span style="color:#334155;">None</span>'
+
+                    # Format animation steps — preserve newlines as <br>
+                    anim_lines = animation.replace("\r\n", "\n").split("\n")
+                    anim_html = "".join([
+                        f'<div style="display:flex; gap:8px; margin-bottom:5px;">'
+                        f'<span style="color:#f59e0b; font-family:JetBrains Mono,monospace; font-size:11px; min-width:14px;">'
+                        f'{"•" if not line.strip()[:1].isdigit() else ""}</span>'
+                        f'<span style="font-size:12px; color:#cbd5e1; line-height:1.5;">{line.strip()}</span>'
+                        f'</div>'
+                        for line in anim_lines if line.strip()
+                    ])
+
+                    st.markdown(f"""
+                    <div class="frame-card" style="margin-bottom:1.25rem; border-radius:14px; overflow:hidden;">
+
+                      <!-- Header -->
+                      <div style="display:flex; align-items:center; justify-content:space-between;
+                                  padding:0.65rem 1rem; border-bottom:1px solid #1e1e3a; background:#0d0d1a;">
+                        <span style="font-size:10px; font-weight:700; letter-spacing:0.14em;
+                                     color:#475569; font-family:'JetBrains Mono',monospace;">
+                          SCENE {sc.get('scene_number','?'):02d}
+                        </span>
+                        <span style="font-size:13px; font-weight:700; color:#e2e8f0;">
+                          {sc.get('title','Untitled')}
+                        </span>
+                      </div>
+
+                      <!-- Body: 5 columns -->
+                      <div style="display:grid; grid-template-columns:1fr 1fr 2fr 2fr 2fr;
+                                  gap:0; border-bottom:1px solid #1e1e3a;">
+
+                        <!-- Col 1: Required 3D Assets -->
+                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
+                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
+                                      color:#3b82f6; text-transform:uppercase; margin-bottom:8px;">
+                            Required 3D Assets
+                          </div>
+                          <div style="display:flex; flex-direction:column; gap:4px;">
+                            {" ".join([f'<span class="scene-tag" style="display:inline-block; margin-bottom:3px;">{a}</span>' for a in assets]) or '<span style="color:#334155; font-size:11px;">—</span>'}
+                          </div>
+                        </div>
+
+                        <!-- Col 2: Labels (UI Text) -->
+                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
+                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
+                                      color:#4ade80; text-transform:uppercase; margin-bottom:8px;">
+                            Labels (UI Text)
+                          </div>
+                          <div style="display:flex; flex-direction:column; gap:4px;">
+                            {" ".join([f'<span class="scene-tag" style="display:inline-block; margin-bottom:3px; background:#1a2e1a; color:#4ade80;">{l}</span>' for l in labels]) or '<span style="color:#334155; font-size:11px;">—</span>'}
+                          </div>
+                        </div>
+
+                        <!-- Col 3: Animation Logic -->
+                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
+                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
+                                      color:#f59e0b; text-transform:uppercase; margin-bottom:8px;">
+                            Animation Logic (GLB Safe)
+                          </div>
+                          <div>{anim_html}</div>
+                        </div>
+
+                        <!-- Col 4: Visual Description -->
+                        <div style="padding:0.85rem 0.9rem; border-right:1px solid #1e1e3a;">
+                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
+                                      color:#a78bfa; text-transform:uppercase; margin-bottom:8px;">
+                            Visual Description
+                          </div>
+                          <div style="font-size:12px; color:#94a3b8; line-height:1.6;">
+                            {visual_desc}
+                          </div>
+                        </div>
+
+                        <!-- Col 5: Narration -->
+                        <div style="padding:0.85rem 0.9rem;">
+                          <div style="font-size:9px; font-weight:700; letter-spacing:0.13em;
+                                      color:#fb7185; text-transform:uppercase; margin-bottom:8px;">
+                            Narration
+                          </div>
+                          <div style="font-size:12px; color:#e2e8f0; line-height:1.7;
+                                      font-style:italic; border-left:2px solid #fb7185;
+                                      padding-left:10px;">
+                            {narration}
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# TAB 3 — EXPORT / IMPORT
+# ════════════════════════════════════════════════════════════
+with tabs[2]:
+    if not active_sb:
+        st.info("Open a storyboard first to export it.")
+    else:
+        scenes = active_sb.get("scenes", [])
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            st.markdown('<div class="card-title">Export</div>', unsafe_allow_html=True)
+            if scenes:
+                # ── Build export payload: normalise every scene to use 'assets' key ──
+                export_scenes = []
+                for sc in scenes:
+                    sc_export = dict(sc)
+                    # Ensure the exported key is always 'assets'
+                    if "assets" not in sc_export:
+                        sc_export["assets"] = sc_export.pop("required_assets", sc_export.pop("models_3d", []))
+                    # Remove legacy keys if present alongside 'assets'
+                    sc_export.pop("required_assets", None)
+                    sc_export.pop("models_3d", None)
+                    # Ensure labels key exists
+                    if "labels" not in sc_export:
+                        sc_export["labels"] = []
+                    export_scenes.append(sc_export)
+
+                export_payload = {
+                    "name": active_sb["name"],
+                    "created": active_sb.get("created", ""),
+                    "scenes": export_scenes
+                }
+                st.download_button(
+                    label="📥 Download Storyboard JSON",
+                    data=json.dumps(export_payload, indent=2),
+                    file_name=f"{active_sb['name'].replace(' ','_')}_storyboard.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+                # Markdown table preview
+                st.markdown("---")
+                st.markdown("**Scene Table Preview**")
+                header = "| # | Title | Assets | Labels | Animation (summary) | Visual Description | Narration |"
+                sep    = "|---|-------|--------|--------|---------------------|--------------------|-----------|"
+                rows_md = [
+                    f"| {s.get('scene_number','?')} | {s.get('title','')} | {', '.join(get_scene_assets(s))} | {', '.join(s.get('labels',[]))} | {s.get('animation','')[:60]}… | {s.get('visual_description','')[:60]}… | {s.get('narration','')[:80]}… |"
+                    for s in scenes
+                ]
+                st.markdown("\n".join([header, sep] + rows_md))            else:
+                st.info("No scenes to export yet.")
+
+        with col_imp:
+            st.markdown('<div class="card-title">Import into Active Storyboard</div>', unsafe_allow_html=True)
+            st.caption("Upload a JSON file exported from LPVision Studio or a raw scenes array.")
+            imp = st.file_uploader("Choose JSON file", type=["json"], key="export_tab_import")
+            if imp:
+                try:
+                    data = json.load(imp)
+                    if isinstance(data, list):
+                        imported_scenes = normalise_scenes(data)
+                    elif isinstance(data, dict) and "scenes" in data:
+                        imported_scenes = normalise_scenes(data["scenes"])
                     else:
-                        st.markdown(result_text)
-                    
-                    # --- DYNAMIC IMAGE LOGIC ---
-                    st.write("---")
-                    st.subheader("🖼️ Visual Asset Reference")
-                    img_keyword = final_text[:20].split()[0] if final_text else "3D"
-                    img_url = f"[https://image.pollinations.ai/prompt/3d%20model%20of%20](https://image.pollinations.ai/prompt/3d%20model%20of%20){img_keyword}%20educational%20style%20high%20detail?width=1080&height=600&nologo=true"
-                    st.image(img_url, caption=f"AI Generated Reference for: {img_keyword}")
-                    
-                    st.success(f"Production brief for {num_scenes} scenes ready!")
-                    st.balloons()
-                else:
-                    st.error("Engine Error. Please check API Key.")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-
-st.divider()
-st.caption("© 2026 LearningPad | AI 3D Pipeline Tools")
+                        st.error("Unrecognized format.")
+                        imported_scenes = []
+                    if imported_scenes:
+                        if st.button("⬆ Apply Imported Scenes", key="apply_import"):
+                            st.session_state.projects[st.session_state.active_project]["storyboards"][active_sb_id]["scenes"] = imported_scenes
+                            st.success(f"Imported {len(imported_scenes)} scenes!")
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Parse error: {e}")
