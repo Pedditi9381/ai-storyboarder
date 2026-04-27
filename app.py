@@ -231,7 +231,6 @@ def generate_scene_image(sc):
         }],
         "generationConfig": {
             "responseModalities": ["IMAGE", "TEXT"],
-            "responseMimeType": "image/png"
         }
     }
 
