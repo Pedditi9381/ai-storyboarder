@@ -4,8 +4,8 @@ import PyPDF2
 import json
 import uuid
 import base64
-import time
 import re
+import io
 from datetime import datetime
 
 # ─── PAGE CONFIG ───────────────────────────────────────────────────────────────
@@ -72,8 +72,16 @@ init_state()
 GROQ_API_KEY   = st.secrets.get("GROQ_API_KEY",   None)
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", None)
 
-GROQ_URL        = "https://api.groq.com/openai/v1/chat/completions"
-GEMINI_IMG_URL  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# Updated Gemini model names — gemini-3.1-flash-image-preview is the latest (Nano Banana 2)
+# Fallback chain: 3.1 → 2.5 → 2.0-preview
+GEMINI_MODELS = [
+    "gemini-3.1-flash-image-preview",
+    "gemini-2.5-flash-image-preview",
+    "gemini-2.0-flash-preview-image-generation",
+]
+GEMINI_IMG_BASE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def get_active_project():
@@ -123,7 +131,6 @@ def section_box(title, color, content_html, bg, border, left_accent=None):
 
 # ─── GROQ: JSON CLEANER ────────────────────────────────────────────────────────
 def fix_control_chars(s):
-    """Escape literal newlines/tabs inside JSON string values."""
     result      = []
     in_string   = False
     escape_next = False
@@ -151,7 +158,6 @@ def fix_control_chars(s):
 
 def strip_fences(raw):
     raw = raw.strip()
-    # Remove ```json ... ``` or ``` ... ```
     raw = re.sub(r'^```[a-zA-Z]*\n?', '', raw)
     raw = re.sub(r'```$', '', raw.strip())
     return raw.strip()
@@ -194,7 +200,6 @@ Use the two-character sequence backslash-n to represent a line break inside a st
             st.error("Groq returned unexpected format (not a JSON array).")
             return None
         return normalise_scenes(data)
-
     except requests.HTTPError as e:
         st.error(f"Groq HTTP error {resp.status_code}: {resp.text[:300]}")
         return None
@@ -207,70 +212,103 @@ Use the two-character sequence backslash-n to represent a line break inside a st
         st.error(f"Generation failed: {e}")
         return None
 
-# ─── GEMINI: IMAGE GENERATION ──────────────────────────────────────────────────
+# ─── IMAGE PROMPT BUILDER ──────────────────────────────────────────────────────
 def build_image_prompt(sc):
     """
-    Craft a prompt that generates a Blender-style 3D Cycles render —
-    clean topology, PBR materials, HDRI lighting — so output looks like
-    a GLB-ready storyboard reference an artist can reproduce in Blender.
+    Craft a prompt for Gemini that produces a Blender-style 3D render —
+    clean hard-surface GLB-ready models, PBR materials, HDRI studio lighting.
+    This is the reference frame an artist uses to build each GLB asset.
     """
     vd     = sc.get("visual_description", "")
     title  = sc.get("title", "")
     assets = ", ".join(get_scene_assets(sc))
     labels = ", ".join(sc.get("labels", []))
     narr   = sc.get("narration", "")[:160]
+    anim   = sc.get("animation", "")[:120]
     return (
-        f"Blender 3D Cycles render, educational animation storyboard frame, scene titled: {title}. "
-        f"Scene layout: {vd} "
-        f"Hard-surface 3D models present: {assets}. On-screen annotation labels: {labels}. "
+        f"Professional 3D CGI storyboard reference frame for educational animation. "
+        f"Scene: '{title}'. "
+        f"Camera and layout: {vd} "
+        f"Hard-surface GLB assets to model and position: {assets}. "
+        f"UI annotation labels visible in scene: {labels}. "
+        f"Animation sequence context: {anim}. "
         f"Educational topic: {narr}. "
-        "Render style: photorealistic Blender Cycles, clean hard-surface meshes with smooth shading, "
-        "visible clean topology with beveled edges suitable for GLB export, "
-        "PBR materials with metallic and roughness maps, "
-        "three-point HDRI studio lighting (warm amber key light, cool blue fill, purple rim light), "
-        "pure dark charcoal studio background, ambient occlusion baked, "
-        "subsurface scattering on organic materials, cinematic depth of field f/4, "
-        "16:9 widescreen composition, models look ready to export to Three.js or Babylon.js as .glb, "
-        "no text overlays, no watermarks, no 2D cartoon style, no illustrations."
+        "Render specifications: Blender 4 Cycles renderer, photorealistic quality, "
+        "clean subdivision-surface meshes with beveled edges (subdivision level 2), "
+        "visible edge loops and clean topology suitable for GLB export to Three.js or Babylon.js, "
+        "PBR shading with metallic/roughness workflow, "
+        "four-point HDRI studio lighting — warm amber key (3200K), cool blue fill (6500K), "
+        "purple-teal rim light, white bounce from below, "
+        "deep charcoal #1a1a2e studio environment with subtle floor reflection, "
+        "ambient occlusion baked, 16:9 widescreen composition, "
+        "cinema-quality depth of field f/2.8 with foreground bokeh, "
+        "objects positioned with clear spatial hierarchy for instructional clarity, "
+        "subsurface scattering on translucent materials, "
+        "no 2D illustration style, no cartoon, no flat design, "
+        "no text overlays, no watermarks, no UI chrome, "
+        "output should look like a professional GLB asset preview render."
     )
 
-
+# ─── GEMINI IMAGE GENERATION ──────────────────────────────────────────────────
 def generate_scene_image_gemini(sc):
-    """Generate image via Gemini 2.0 Flash Image Generation (correct model name)."""
+    """
+    Try Gemini image models in priority order:
+      1. gemini-3.1-flash-image-preview  (Nano Banana 2 — best quality, 1K default)
+      2. gemini-2.5-flash-image-preview  (Nano Banana 1 — good quality)
+      3. gemini-2.0-flash-preview-image-generation  (stable preview)
+    Returns (base64_str, None) on success or (None, error_msg) on failure.
+    """
     if not GEMINI_API_KEY:
         return None, "No GEMINI_API_KEY in secrets."
 
+    prompt = build_image_prompt(sc)
     payload = {
-        "contents": [{"parts": [{"text": build_image_prompt(sc)}]}],
-        "generationConfig": {"responseModalities": ["IMAGE", "TEXT"]}
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseModalities": ["IMAGE", "TEXT"],
+            "imageConfig": {"aspectRatio": "16:9", "imageSize": "1K"}
+        }
     }
-    try:
-        resp = requests.post(
-            f"{GEMINI_IMG_URL}?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=90
-        )
-        if resp.status_code == 200:
-            parts = (resp.json()
-                     .get("candidates", [{}])[0]
-                     .get("content", {})
-                     .get("parts", []))
-            for part in parts:
-                inline = part.get("inlineData", {})
-                if inline.get("mimeType", "").startswith("image/"):
-                    return inline["data"], None
-            return None, "Gemini responded but returned no image part."
-        err = resp.json().get("error", {}).get("message", resp.text[:300])
-        return None, f"Gemini {resp.status_code}: {err}"
-    except Exception as e:
-        return None, str(e)
+
+    last_err = "No models tried."
+    for model in GEMINI_MODELS:
+        url = f"{GEMINI_IMG_BASE.format(model=model)}?key={GEMINI_API_KEY}"
+        try:
+            resp = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=90
+            )
+            if resp.status_code == 200:
+                parts = (resp.json()
+                         .get("candidates", [{}])[0]
+                         .get("content", {})
+                         .get("parts", []))
+                for part in parts:
+                    inline = part.get("inlineData", {})
+                    if inline.get("mimeType", "").startswith("image/"):
+                        return inline["data"], None
+                last_err = f"{model}: responded 200 but no image part found."
+            elif resp.status_code in (404, 400):
+                # Model not available — try next
+                err_msg = resp.json().get("error", {}).get("message", resp.text[:200])
+                last_err = f"{model} {resp.status_code}: {err_msg}"
+                continue
+            else:
+                err_msg = resp.json().get("error", {}).get("message", resp.text[:200])
+                last_err = f"{model} {resp.status_code}: {err_msg}"
+                break  # Non-404 error — don't retry other models
+        except Exception as e:
+            last_err = f"{model} exception: {e}"
+            continue
+
+    return None, last_err
 
 
 def generate_scene_image_pollinations(sc):
     """
-    Fallback: Pollinations.ai Flux model — free, no API key.
-    enhance=true improves prompt fidelity. seed=-1 = random.
+    Fallback: Pollinations.ai Flux model — free, no API key needed.
     """
     prompt  = build_image_prompt(sc)
     encoded = requests.utils.quote(prompt[:700])
@@ -286,19 +324,217 @@ def generate_scene_image_pollinations(sc):
     except Exception as e:
         return None, str(e)
 
+
 def generate_scene_image(sc):
-    """Try Gemini first; fall back to Pollinations."""
+    """Try Gemini first (all models in fallback chain); fall back to Pollinations."""
     if GEMINI_API_KEY:
         b64, err = generate_scene_image_gemini(sc)
         if b64:
             return b64
-        st.warning(f"Gemini image failed ({err}), trying Pollinations fallback…")
+        st.warning(f"Gemini image failed ({err}), using Pollinations fallback…")
 
     b64, err = generate_scene_image_pollinations(sc)
     if b64:
         return b64
     st.error(f"Image generation failed: {err}")
     return None
+
+# ─── PDF EXPORT ────────────────────────────────────────────────────────────────
+def generate_storyboard_pdf(sb_name, scenes):
+    """
+    Generate a professional storyboard PDF using reportlab.
+    Each scene gets its own section with image (if available), metadata, and narration.
+    Returns bytes of the PDF.
+    """
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.units import mm, cm
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib.colors import HexColor, white, black
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            HRFlowable, Image as RLImage, KeepTogether
+        )
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+        from PIL import Image as PILImage
+    except ImportError:
+        return None, "reportlab or Pillow not installed. Run: pip install reportlab Pillow"
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        leftMargin=15*mm, rightMargin=15*mm,
+        topMargin=12*mm, bottomMargin=12*mm,
+        title=f"LPVision Studio — {sb_name}",
+        author="LPVision Studio"
+    )
+
+    # ── Colours
+    C_BG        = HexColor("#06060f")
+    C_CARD      = HexColor("#0d0d1a")
+    C_BORDER    = HexColor("#1e1e3a")
+    C_ACCENT    = HexColor("#3b82f6")
+    C_PURPLE    = HexColor("#8b5cf6")
+    C_GREEN     = HexColor("#4ade80")
+    C_AMBER     = HexColor("#f59e0b")
+    C_PINK      = HexColor("#fb7185")
+    C_TEXT      = HexColor("#e2e8f0")
+    C_MUTED     = HexColor("#64748b")
+    C_WHITE     = white
+
+    # ── Styles
+    def S(name, **kw):
+        base = dict(fontName="Helvetica", fontSize=9, leading=13,
+                    textColor=C_TEXT, spaceAfter=2)
+        base.update(kw)
+        return ParagraphStyle(name, **base)
+
+    sTitle    = S("sTitle",  fontSize=22, fontName="Helvetica-Bold",
+                  textColor=C_TEXT, spaceAfter=4, leading=26)
+    sSub      = S("sSub",    fontSize=11, textColor=C_MUTED, spaceAfter=2)
+    sLabel    = S("sLabel",  fontSize=7,  fontName="Helvetica-Bold",
+                  textColor=C_MUTED, spaceAfter=3, letterSpacing=1.2)
+    sSceneNum = S("sSceneNum", fontSize=18, fontName="Helvetica-Bold",
+                  textColor=C_ACCENT, alignment=TA_CENTER, leading=22)
+    sSceneTitle = S("sSceneTitle", fontSize=12, fontName="Helvetica-Bold",
+                    textColor=C_TEXT, leading=16)
+    sBody     = S("sBody",   fontSize=8,  textColor=C_TEXT, leading=12)
+    sTag      = S("sTag",    fontSize=7,  textColor=C_ACCENT, leading=10)
+    sTagG     = S("sTagG",   fontSize=7,  textColor=C_GREEN, leading=10)
+    sNarr     = S("sNarr",   fontSize=8,  textColor=HexColor("#fce7f3"),
+                  fontName="Helvetica-Oblique", leading=12)
+    sAnim     = S("sAnim",   fontSize=7.5, textColor=HexColor("#fde68a"), leading=11)
+    sVD       = S("sVD",     fontSize=7.5, textColor=HexColor("#c4b5fd"), leading=11)
+    sFooter   = S("sFooter", fontSize=7,  textColor=C_MUTED, alignment=TA_CENTER)
+
+    story = []
+
+    # ── Cover header
+    story.append(Paragraph("LPVision Studio", sTitle))
+    story.append(Paragraph(f"Storyboard Export · {sb_name}", sSub))
+    story.append(Paragraph(
+        f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · {len(scenes)} Scenes",
+        S("sDate", fontSize=8, textColor=C_MUTED)
+    ))
+    story.append(HRFlowable(width="100%", thickness=1, color=C_BORDER, spaceAfter=8))
+
+    # ── Scene cards
+    for i, sc in enumerate(scenes):
+        snum   = sc.get("scene_number", i + 1)
+        title  = sc.get("title", "Untitled")
+        assets = get_scene_assets(sc)
+        labels = sc.get("labels", [])
+        anim   = sc.get("animation", "").strip().replace("\\n", "\n")
+        vd     = sc.get("visual_description", "").strip()
+        narr   = sc.get("narration", "").strip()
+        img_b64 = sc.get("scene_image")
+
+        # Build image column
+        img_cell = []
+        if img_b64:
+            try:
+                img_bytes = base64.b64decode(img_b64)
+                pil_img = PILImage.open(io.BytesIO(img_bytes))
+                img_buf = io.BytesIO()
+                pil_img.save(img_buf, format="PNG")
+                img_buf.seek(0)
+                rl_img = RLImage(img_buf, width=70*mm, height=39.4*mm)
+                img_cell.append(rl_img)
+            except Exception:
+                img_cell.append(Paragraph("[Image unavailable]",
+                    S("sImgErr", fontSize=8, textColor=C_MUTED)))
+        else:
+            img_cell.append(Paragraph("[ No Image Generated ]",
+                S("sNoImg", fontSize=8, textColor=C_MUTED, alignment=TA_CENTER)))
+
+        # Scene number badge
+        num_cell = [
+            Paragraph(f"{snum:02d}", sSceneNum),
+        ]
+
+        # Title + assets + labels
+        asset_tags = "  ".join([f"[{a}]" for a in assets]) or "—"
+        label_tags = "  ".join([f"[{l}]" for l in labels]) or "—"
+        meta_cell = [
+            Paragraph(f"SCENE {snum:02d}", sLabel),
+            Paragraph(title, sSceneTitle),
+            Spacer(1, 4),
+            Paragraph("3D ASSETS", S("sLbl2", fontSize=6, fontName="Helvetica-Bold",
+                      textColor=C_ACCENT, spaceAfter=2)),
+            Paragraph(asset_tags, sTag),
+            Spacer(1, 3),
+            Paragraph("UI LABELS", S("sLbl3", fontSize=6, fontName="Helvetica-Bold",
+                      textColor=C_GREEN, spaceAfter=2)),
+            Paragraph(label_tags, sTagG),
+        ]
+
+        # Narration
+        narr_cell = [
+            Paragraph("NARRATION", S("sLbl4", fontSize=6, fontName="Helvetica-Bold",
+                      textColor=C_PINK, spaceAfter=3)),
+            Paragraph(narr or "—", sNarr),
+        ]
+
+        # Animation + Visual Description
+        anim_lines = [l.strip() for l in anim.split("\n") if l.strip()]
+        anim_text = "<br/>".join([
+            f"{idx+1}. {l.lstrip('0123456789.) ') if l[:1].isdigit() else l}"
+            for idx, l in enumerate(anim_lines)
+        ]) or "—"
+        anim_cell = [
+            Paragraph("ANIMATION LOGIC", S("sLbl5", fontSize=6, fontName="Helvetica-Bold",
+                      textColor=C_AMBER, spaceAfter=3)),
+            Paragraph(anim_text, sAnim),
+            Spacer(1, 5),
+            Paragraph("VISUAL DESCRIPTION", S("sLbl6", fontSize=6, fontName="Helvetica-Bold",
+                      textColor=C_PURPLE, spaceAfter=3)),
+            Paragraph(vd or "—", sVD),
+        ]
+
+        # Layout: [num | img | meta | narr | anim+vd]
+        col_w = [14*mm, 72*mm, 52*mm, 58*mm, 58*mm]
+        data = [[num_cell, img_cell, meta_cell, narr_cell, anim_cell]]
+
+        tbl = Table(data, colWidths=col_w, repeatRows=0)
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND",   (0, 0), (-1, -1), C_CARD),
+            ("BOX",          (0, 0), (-1, -1), 1, C_BORDER),
+            ("INNERGRID",    (0, 0), (-1, -1), 0.5, HexColor("#151528")),
+            ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING",   (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+            # Scene number column accent
+            ("BACKGROUND",   (0, 0), (0, -1), HexColor("#0a1628")),
+            ("LINEAFTER",    (0, 0), (0, -1), 2, C_ACCENT),
+            # Narration column accent
+            ("LINEBEFORE",   (3, 0), (3, -1), 2, C_PINK),
+            # Anim column accent
+            ("LINEBEFORE",   (4, 0), (4, -1), 2, C_AMBER),
+        ]))
+
+        story.append(KeepTogether([tbl]))
+        story.append(Spacer(1, 5))
+
+    # ── Footer
+    story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceBefore=6))
+    story.append(Paragraph(
+        f"LPVision Studio · {sb_name} · {len(scenes)} Scenes · © {datetime.now().year} LearningPad",
+        sFooter
+    ))
+
+    # ── Build
+    def on_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFillColor(C_BG)
+        canvas.rect(0, 0, landscape(A4)[0], landscape(A4)[1], fill=1, stroke=0)
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
+    buf.seek(0)
+    return buf.getvalue(), None
 
 # ─── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -360,7 +596,7 @@ with st.sidebar:
           {'✓ Connected' if groq_ok else '✗ Add GROQ_API_KEY'}</span><br>
       Gemini
         <span style="color:{'#4ade80' if gemini_ok else '#f59e0b'};">
-          {'✓ Connected' if gemini_ok else '⚠ Optional (uses Pollinations fallback)'}</span>
+          {'✓ Connected (3.1 Flash)' if gemini_ok else '⚠ Optional (Pollinations fallback)'}</span>
     </div>
     <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">
       © 2026 LearningPad
@@ -374,7 +610,6 @@ storyboards  = proj.get("storyboards", {})
 active_sb    = get_active_storyboard()
 active_sb_id = st.session_state.active_storyboard
 
-# Top bar
 st.markdown(f"""
 <div style="display:flex;align-items:center;justify-content:space-between;
             padding:0.6rem 0;border-bottom:1px solid #1e1e3a;margin-bottom:1rem;">
@@ -391,8 +626,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── TAB SWITCHING ─────────────────────────────────────────────────────────────
-# goto_editor flag: render Editor tab first so Streamlit selects it on rerun
 default_tab = 1 if st.session_state.goto_editor else 0
 tabs = st.tabs(["📋 Storyboards", "🎬 Editor", "📦 Export / Import"])
 
@@ -482,7 +715,6 @@ with tabs[default_tab if default_tab == 1 else 1]:
     if not active_sb:
         st.info("Open or create a storyboard from the **Storyboards** tab.")
     else:
-        # ── GENERATION CONTROLS ───────────────────────────────────────────────
         has_scenes = bool(active_sb.get("scenes"))
         with st.expander("⚙️  Generate / Input Controls", expanded=not has_scenes):
             c1, c2 = st.columns(2)
@@ -528,7 +760,6 @@ with tabs[default_tab if default_tab == 1 else 1]:
                         st.success(f"✓ {len(new_sc)} scenes generated!")
                         st.rerun()
 
-        # ── SCENE CARDS ───────────────────────────────────────────────────────
         scenes = active_sb.get("scenes", [])
 
         if not scenes:
@@ -541,7 +772,6 @@ with tabs[default_tab if default_tab == 1 else 1]:
             </div>
             """, unsafe_allow_html=True)
         else:
-            # Storyboard header
             n_images = sum(1 for s in scenes if s.get("scene_image"))
             st.markdown(f"""
             <div style="display:flex;align-items:center;justify-content:space-between;
@@ -567,7 +797,6 @@ with tabs[default_tab if default_tab == 1 else 1]:
                 img_b64 = sc.get("scene_image")
                 editing = (st.session_state.editing_scene == i)
 
-                # ── HEADER ────────────────────────────────────────────────────
                 h1, h2, h3, h4 = st.columns([0.06, 0.52, 0.18, 0.24])
                 with h1:
                     st.markdown(f"""
@@ -578,8 +807,7 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     """, unsafe_allow_html=True)
                 with h2:
                     st.markdown(f"""
-                    <div style="font-size:15px;font-weight:700;color:#f1f5f9;
-                                padding-top:4px;">{title}</div>
+                    <div style="font-size:15px;font-weight:700;color:#f1f5f9;padding-top:4px;">{title}</div>
                     """, unsafe_allow_html=True)
                 with h3:
                     edit_lbl = "✅ Done" if editing else "✏️ Edit Scene"
@@ -590,7 +818,6 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     img_lbl = "🔄 Regenerate Image" if img_b64 else "🖼 Generate Image"
                     gen_img = st.button(img_lbl, key=f"gen_img_{i}", use_container_width=True)
 
-                # ── EDIT MODE ─────────────────────────────────────────────────
                 if editing:
                     with st.container():
                         st.markdown("""<div style="background:#0a0a1a;border:1px solid #2563eb;
@@ -612,21 +839,19 @@ with tabs[default_tab if default_tab == 1 else 1]:
                         with sv:
                             if st.button("💾 Save Changes", key=f"save_{i}", use_container_width=True):
                                 scenes[i].update({
-                                    "title":             new_title.strip(),
-                                    "assets":            [x.strip() for x in new_assets.split(",") if x.strip()],
-                                    "labels":            [x.strip() for x in new_labels.split(",") if x.strip()],
-                                    "narration":         new_narr.strip(),
-                                    "visual_description":new_vd.strip(),
-                                    "animation":         new_anim.strip(),
+                                    "title":              new_title.strip(),
+                                    "assets":             [x.strip() for x in new_assets.split(",") if x.strip()],
+                                    "labels":             [x.strip() for x in new_labels.split(",") if x.strip()],
+                                    "narration":          new_narr.strip(),
+                                    "visual_description": new_vd.strip(),
+                                    "animation":          new_anim.strip(),
                                 })
                                 save_scenes(scenes)
                                 st.session_state.editing_scene = None
                                 st.rerun()
                         st.markdown("</div>", unsafe_allow_html=True)
 
-                # ── DISPLAY MODE ──────────────────────────────────────────────
                 else:
-                    # ROW 1: Image | Assets | Labels | Narration
                     c_img, c_a, c_b, c_n = st.columns([1, 1, 1, 2])
 
                     with c_img:
@@ -647,7 +872,7 @@ with tabs[default_tab if default_tab == 1 else 1]:
                         tags = "".join([pill(a, "#0f1f3d", "#60a5fa") for a in assets]) \
                                or '<span style="color:#334155;font-size:11px;">—</span>'
                         st.markdown(section_box(
-                            "🔷 3D Assets", "#3b82f6",
+                            "🔷 3D Assets (GLB)", "#3b82f6",
                             f'<div style="line-height:1.9;">{tags}</div>',
                             "#0d1117", "#1e3a5f"
                         ), unsafe_allow_html=True)
@@ -670,11 +895,9 @@ with tabs[default_tab if default_tab == 1 else 1]:
 
                     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-                    # ROW 2: Animation | Visual Description
                     c_anim, c_vd = st.columns(2)
 
                     with c_anim:
-                        # Split on \n or numbered lines
                         anim_lines = [l.strip() for l in
                                       anim.replace("\\n", "\n").replace("\r\n", "\n").split("\n")
                                       if l.strip()]
@@ -701,18 +924,16 @@ with tabs[default_tab if default_tab == 1 else 1]:
                             "#120d1a", "#2d1a4a", left_accent="#a78bfa"
                         ), unsafe_allow_html=True)
 
-                # ── IMAGE GENERATION ──────────────────────────────────────────
                 if gen_img:
-                    provider = "Gemini" if GEMINI_API_KEY else "Pollinations"
-                    with st.spinner(f"Generating image for Scene {snum:02d} via {provider}…"):
+                    provider = "Gemini 3.1 Flash" if GEMINI_API_KEY else "Pollinations Flux"
+                    with st.spinner(f"Generating 3D storyboard frame for Scene {snum:02d} via {provider}…"):
                         b64 = generate_scene_image(sc)
                     if b64:
                         scenes[i]["scene_image"] = b64
                         save_scenes(scenes)
-                        st.success(f"✓ Image generated for Scene {snum:02d}!")
+                        st.success(f"✓ 3D storyboard frame generated for Scene {snum:02d}!")
                         st.rerun()
 
-                # ── DELETE + DIVIDER ──────────────────────────────────────────
                 st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
                 _, dc = st.columns([8, 1])
                 with dc:
@@ -741,7 +962,7 @@ with tabs[2]:
         with c_exp:
             st.markdown('<div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#475569;text-transform:uppercase;margin-bottom:0.75rem;">Export</div>', unsafe_allow_html=True)
             if scenes:
-                # Build clean export copy
+                # Clean export copy
                 export_scenes = []
                 for sc in scenes:
                     e = dict(sc)
@@ -752,12 +973,17 @@ with tabs[2]:
                     e.setdefault("labels", [])
                     export_scenes.append(e)
 
-                inc_imgs = st.checkbox("Include generated images in export", value=False)
+                inc_imgs = st.checkbox("Include generated images in JSON export", value=False)
                 if not inc_imgs:
-                    for e in export_scenes:
+                    export_no_img = [dict(e) for e in export_scenes]
+                    for e in export_no_img:
                         e.pop("scene_image", None)
+                else:
+                    export_no_img = export_scenes
 
-                payload_out = {"name": active_sb["name"], "created": active_sb.get("created",""), "scenes": export_scenes}
+                payload_out = {"name": active_sb["name"], "created": active_sb.get("created",""), "scenes": export_no_img}
+
+                # ── JSON Export
                 st.download_button(
                     "📥 Download Storyboard JSON",
                     data=json.dumps(payload_out, indent=2),
@@ -765,6 +991,37 @@ with tabs[2]:
                     mime="application/json",
                     use_container_width=True
                 )
+
+                st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+                # ── PDF Export
+                st.markdown("""
+                <div style="font-size:10px;color:#475569;margin-bottom:6px;">
+                  PDF export includes all scene data + generated images (if any).
+                  Requires <code>reportlab</code> and <code>Pillow</code>.
+                </div>
+                """, unsafe_allow_html=True)
+
+                if st.button("📄 Generate PDF Storyboard", key="gen_pdf_btn", use_container_width=True):
+                    with st.spinner("Building PDF storyboard…"):
+                        pdf_bytes, pdf_err = generate_storyboard_pdf(active_sb["name"], scenes)
+                    if pdf_bytes:
+                        st.session_state["_pdf_bytes"] = pdf_bytes
+                        st.session_state["_pdf_name"]  = active_sb["name"]
+                        st.success(f"✓ PDF ready — {len(pdf_bytes)//1024} KB")
+                        st.rerun()
+                    else:
+                        st.error(f"PDF generation failed: {pdf_err}")
+
+                if "_pdf_bytes" in st.session_state and st.session_state.get("_pdf_name") == active_sb["name"]:
+                    st.download_button(
+                        "⬇️ Download PDF",
+                        data=st.session_state["_pdf_bytes"],
+                        file_name=f"{active_sb['name'].replace(' ','_')}_storyboard.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+
                 st.markdown("---")
                 st.markdown("**Scene Table Preview**")
                 hdr  = "| # | Title | Assets | Labels | Narration |"
