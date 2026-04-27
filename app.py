@@ -9,10 +9,10 @@ import io
 import time
 from datetime import datetime
 
-# â”€â”€â”€ PAGE CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-st.set_page_config(page_title="LPVision Studio", layout="wide", page_icon="ðŸŽ¬")
+# ─── PAGE CONFIG ───────────────────────────────────────────────────────────────
+st.set_page_config(page_title="LPVision Studio", layout="wide", page_icon="🎬")
 
-# â”€â”€â”€ CSS + LIGHTBOX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── CSS + LIGHTBOX ────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -42,13 +42,13 @@ label { color:#64748b !important; font-size:12px !important; font-weight:500 !im
 hr { border-color:#1e1e3a !important; }
 .stRadio label { color:#94a3b8 !important; }
 
-/* â”€â”€ Clickable scene image â”€â”€ */
+/* ── Clickable scene image ── */
 .scene-img-wrap { position:relative; cursor:zoom-in; display:block; }
 .scene-img-wrap img { width:100%; border-radius:8px; object-fit:cover; border:1px solid #2d2d5a; display:block; transition:transform 0.15s,box-shadow 0.15s; }
 .scene-img-wrap:hover img { transform:scale(1.02); box-shadow:0 0 0 2px #3b82f6,0 8px 32px rgba(59,130,246,0.25); }
 .zoom-hint { position:absolute; bottom:6px; right:8px; font-size:10px; color:rgba(255,255,255,0.6); background:rgba(0,0,0,0.6); border-radius:4px; padding:2px 7px; pointer-events:none; }
 
-/* â”€â”€ Lightbox â”€â”€ */
+/* ── Lightbox ── */
 #lpv-lightbox { display:none; position:fixed; z-index:99999; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; backdrop-filter:blur(10px); }
 #lpv-lightbox.open { display:flex; }
 #lpv-lightbox img { max-width:92vw; max-height:88vh; border-radius:12px; box-shadow:0 0 60px rgba(59,130,246,0.4),0 0 0 1px #3b82f6; object-fit:contain; }
@@ -80,7 +80,7 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLB()
 </script>
 """, unsafe_allow_html=True)
 
-# â”€â”€â”€ SESSION STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── SESSION STATE ─────────────────────────────────────────────────────────────
 def init_state():
     defaults = {
         "active_project": None, "active_storyboard": None,
@@ -99,7 +99,7 @@ def init_state():
 
 init_state()
 
-# â”€â”€â”€ API KEYS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── API KEYS ──────────────────────────────────────────────────────────────────
 GROQ_API_KEY   = st.secrets.get("GROQ_API_KEY",   None)
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", None)
 GROQ_URL       = "https://api.groq.com/openai/v1/chat/completions"
@@ -110,7 +110,7 @@ GEMINI_MODELS  = [
 ]
 GEMINI_BASE    = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-# â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── HELPERS ───────────────────────────────────────────────────────────────────
 def get_active_project():
     return st.session_state.projects.get(st.session_state.active_project, {})
 
@@ -149,12 +149,12 @@ def section_box(title, color, html, bg, border, left_accent=None):
 
 def clickable_img(b64, scene_title, snum):
     uri = f"data:image/png;base64,{b64}"
-    cap = f"Scene {snum:02d}  Â·  {scene_title}".replace("'", "&#39;")
+    cap = f"Scene {snum:02d}  ·  {scene_title}".replace("'", "&#39;")
     return (f'<div class="scene-img-wrap" onclick="openLB(\'{uri}\',\'{cap}\')">'
             f'<img src="{uri}" alt="{cap}"/>'
-            f'<span class="zoom-hint">ðŸ” Click to expand</span></div>')
+            f'<span class="zoom-hint">🔍 Click to expand</span></div>')
 
-# â”€â”€â”€ GROQ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── GROQ helpers ──────────────────────────────────────────────────────────────
 def fix_control_chars(s):
     res, in_str, esc = [], False, False
     for ch in s:
@@ -174,7 +174,7 @@ def strip_fences(raw):
     raw = re.sub(r'^```[a-zA-Z]*\n?', '', raw)
     return re.sub(r'```$', '', raw.strip()).strip()
 
-# â”€â”€â”€ GROQ: SCENE GENERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── GROQ: SCENE GENERATION ────────────────────────────────────────────────────
 def generate_scenes_groq(text, num_scenes):
     if not GROQ_API_KEY:
         st.error("Add GROQ_API_KEY to Streamlit Secrets."); return None
@@ -206,11 +206,11 @@ def generate_scenes_groq(text, num_scenes):
         st.error(f"Groq HTTP {resp.status_code}: {resp.text[:300]}"); return None
     except json.JSONDecodeError as e:
         st.error(f"JSON parse error @{e.pos}: {e.msg}")
-        st.code(f"â€¦{raw[max(0,e.pos-60):e.pos+60]}â€¦"); return None
+        st.code(f"…{raw[max(0,e.pos-60):e.pos+60]}…"); return None
     except Exception as e:
         st.error(f"Generation failed: {e}"); return None
 
-# â”€â”€â”€ IMAGE PROMPT: ANIMATION-LOGIC DRIVEN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── IMAGE PROMPT: ANIMATION-LOGIC DRIVEN ─────────────────────────────────────
 def build_image_prompt(sc):
     """
     The ANIMATION LOGIC is the primary driver of what to depict.
@@ -228,7 +228,7 @@ def build_image_prompt(sc):
     return (
         f"Professional 3D CGI educational animation storyboard frame. "
         f"Scene: '{title}'. "
-        f"PRIMARY â€” Animation action to depict (show the key visual moment of this step): {anim}. "
+        f"PRIMARY — Animation action to depict (show the key visual moment of this step): {anim}. "
         f"3D GLB assets present: {assets}. "
         f"On-screen annotation labels: {labels}. "
         f"Camera / staging: {vd} "
@@ -241,7 +241,7 @@ def build_image_prompt(sc):
         "no 2D art, no cartoon, no text overlays, no watermarks."
     )
 
-# â”€â”€â”€ GEMINI: SILENT QUOTA HANDLING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── GEMINI: SILENT QUOTA HANDLING ────────────────────────────────────────────
 def _is_quota(code, msg):
     return code == 429 or "quota" in msg.lower() or "rate" in msg.lower()
 
@@ -302,22 +302,22 @@ def generate_scene_image(sc, status_slot=None):
     if GEMINI_API_KEY:
         b64, err = generate_scene_image_gemini(sc)
         if b64:
-            log("âœ“ via Gemini")
+            log("✓ via Gemini")
             return b64
         if err == "quota":
-            log("Gemini quota reached â€” switching to Pollinationsâ€¦")
+            log("Gemini quota reached — switching to Pollinations…")
         elif err not in ("no_key", "no_models", "200_no_image"):
-            log("Gemini unavailable â€” switching to Pollinationsâ€¦")
+            log("Gemini unavailable — switching to Pollinations…")
         # fall through silently
 
     b64, err = generate_scene_image_pollinations(sc)
     if b64:
-        log("âœ“ via Pollinations")
+        log("✓ via Pollinations")
         return b64
-    log(f"âš  Image failed: {err}")
+    log(f"⚠ Image failed: {err}")
     return None
 
-# â”€â”€â”€ PDF EXPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── PDF EXPORT ────────────────────────────────────────────────────────────────
 def generate_storyboard_pdf(sb_name, scenes):
     try:
         from reportlab.lib.pagesizes import A4, landscape
@@ -334,7 +334,7 @@ def generate_storyboard_pdf(sb_name, scenes):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
         leftMargin=15*mm, rightMargin=15*mm, topMargin=12*mm, bottomMargin=12*mm,
-        title=f"LPVision â€” {sb_name}", author="LPVision Studio")
+        title=f"LPVision — {sb_name}", author="LPVision Studio")
 
     C = dict(bg=HexColor("#06060f"), card=HexColor("#0d0d1a"), bord=HexColor("#1e1e3a"),
              blue=HexColor("#3b82f6"), purp=HexColor("#8b5cf6"), green=HexColor("#4ade80"),
@@ -347,8 +347,8 @@ def generate_storyboard_pdf(sb_name, scenes):
 
     story = [
         Paragraph("LPVision Studio", S("H", fontSize=22, fontName="Helvetica-Bold", leading=26)),
-        Paragraph(f"Storyboard Export Â· {sb_name}", S("sub", fontSize=11, textColor=C["mute"])),
-        Paragraph(f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} Â· {len(scenes)} Scenes",
+        Paragraph(f"Storyboard Export · {sb_name}", S("sub", fontSize=11, textColor=C["mute"])),
+        Paragraph(f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · {len(scenes)} Scenes",
                   S("dt", fontSize=8, textColor=C["mute"])),
         HRFlowable(width="100%", thickness=1, color=C["bord"], spaceAfter=8)
     ]
@@ -370,9 +370,9 @@ def generate_storyboard_pdf(sb_name, scenes):
             img_cell.append(Paragraph("[ No Image ]", S("ni", fontSize=8, textColor=C["mute"], alignment=TA_CENTER)))
 
         al  = [l.strip() for l in anim.split("\n") if l.strip()]
-        ah  = "<br/>".join([f"{k+1}. {l.lstrip('0123456789.) ')}" for k,l in enumerate(al)]) or "â€”"
-        at  = "  ".join([f"[{a}]" for a in assets]) or "â€”"
-        lt  = "  ".join([f"[{l}]" for l in labels]) or "â€”"
+        ah  = "<br/>".join([f"{k+1}. {l.lstrip('0123456789.) ')}" for k,l in enumerate(al)]) or "—"
+        at  = "  ".join([f"[{a}]" for a in assets]) or "—"
+        lt  = "  ".join([f"[{l}]" for l in labels]) or "—"
 
         data = [[
             [Paragraph(f"{snum:02d}", S("sn", fontSize=18, fontName="Helvetica-Bold",
@@ -387,13 +387,13 @@ def generate_storyboard_pdf(sb_name, scenes):
              Paragraph("UI LABELS", S("ll",fontSize=6,fontName="Helvetica-Bold",textColor=C["green"],spaceAfter=2)),
              Paragraph(lt, S("lt",fontSize=7,textColor=C["green"],leading=10))],
             [Paragraph("NARRATION", S("nl",fontSize=6,fontName="Helvetica-Bold",textColor=C["pink"],spaceAfter=3)),
-             Paragraph(narr or "â€”", S("nb",fontSize=8,fontName="Helvetica-Oblique",
+             Paragraph(narr or "—", S("nb",fontSize=8,fontName="Helvetica-Oblique",
                         textColor=HexColor("#fce7f3"),leading=12))],
             [Paragraph("ANIMATION LOGIC", S("anl",fontSize=6,fontName="Helvetica-Bold",textColor=C["ambr"],spaceAfter=3)),
              Paragraph(ah, S("an",fontSize=7.5,textColor=HexColor("#fde68a"),leading=11)),
              Spacer(1,5),
              Paragraph("VISUAL DESCRIPTION", S("vdl",fontSize=6,fontName="Helvetica-Bold",textColor=C["purp"],spaceAfter=3)),
-             Paragraph(vd or "â€”", S("vd",fontSize=7.5,textColor=HexColor("#c4b5fd"),leading=11))]
+             Paragraph(vd or "—", S("vd",fontSize=7.5,textColor=HexColor("#c4b5fd"),leading=11))]
         ]]
         tbl = Table(data, colWidths=[14*mm, 72*mm, 52*mm, 58*mm, 58*mm])
         tbl.setStyle(TableStyle([
@@ -407,7 +407,7 @@ def generate_storyboard_pdf(sb_name, scenes):
         story += [KeepTogether([tbl]), Spacer(1,5)]
 
     story += [HRFlowable(width="100%",thickness=0.5,color=C["bord"],spaceBefore=6),
-              Paragraph(f"LPVision Studio Â· {sb_name} Â· {len(scenes)} Scenes Â· Â© {datetime.now().year} LearningPad",
+              Paragraph(f"LPVision Studio · {sb_name} · {len(scenes)} Scenes · © {datetime.now().year} LearningPad",
                         S("ft",fontSize=7,textColor=C["mute"],alignment=TA_CENTER))]
 
     def on_page(canvas, doc):
@@ -417,7 +417,7 @@ def generate_storyboard_pdf(sb_name, scenes):
     doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
     buf.seek(0); return buf.getvalue(), None
 
-# â”€â”€â”€ SIDEBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('''<div class="sidebar-brand"><div class="logo">LP</div>
       <div><div class="brand-text">LPVISION</div><div class="brand-name">Studio</div></div></div>
@@ -425,7 +425,7 @@ with st.sidebar:
 
     st.markdown('<div style="font-size:10px;font-weight:600;letter-spacing:0.15em;color:#475569;text-transform:uppercase;margin-bottom:0.5rem;">Projects</div>', unsafe_allow_html=True)
 
-    with st.expander("ï¼‹ New Project"):
+    with st.expander("＋ New Project"):
         new_proj_name = st.text_input("Project name", placeholder="e.g. Biology Ch3", key="new_proj_input")
         if st.button("Create Project", key="create_proj_btn"):
             if new_proj_name.strip():
@@ -439,7 +439,7 @@ with st.sidebar:
 
     for pid, proj in st.session_state.projects.items():
         is_active = pid == st.session_state.active_project
-        lbl = f"{'â–¸ ' if is_active else ''}{proj['name']}  [{len(proj.get('storyboards',{}))}]"
+        lbl = f"{'▸ ' if is_active else ''}{proj['name']}  [{len(proj.get('storyboards',{}))}]"
         if st.button(lbl, key=f"proj_btn_{pid}", use_container_width=True):
             st.session_state.active_project = pid
             st.session_state.active_storyboard = None
@@ -448,7 +448,7 @@ with st.sidebar:
 
     if len(st.session_state.projects) > 1:
         st.markdown("---")
-        with st.expander("ðŸ—‘ Delete Project"):
+        with st.expander("🗑 Delete Project"):
             st.warning(f"Delete **{get_active_project().get('name','')}**?")
             if st.button("Confirm Delete", key="del_proj_confirm"):
                 del st.session_state.projects[st.session_state.active_project]
@@ -461,13 +461,13 @@ with st.sidebar:
     groq_ok = bool(GROQ_API_KEY); gem_ok = bool(GEMINI_API_KEY)
     st.markdown(f"""
     <div style="font-size:11px;color:#475569;line-height:2;">
-      Groq <span style="color:{'#4ade80' if groq_ok else '#f87171'};">{'âœ“ Connected' if groq_ok else 'âœ— Add GROQ_API_KEY'}</span><br>
-      Gemini <span style="color:{'#4ade80' if gem_ok else '#f59e0b'};">{'âœ“ Connected' if gem_ok else 'âš  Pollinations fallback'}</span>
+      Groq <span style="color:{'#4ade80' if groq_ok else '#f87171'};">{'✓ Connected' if groq_ok else '✗ Add GROQ_API_KEY'}</span><br>
+      Gemini <span style="color:{'#4ade80' if gem_ok else '#f59e0b'};">{'✓ Connected' if gem_ok else '⚠ Pollinations fallback'}</span>
     </div>
-    <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">Â© 2026 LearningPad</div>
+    <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">© 2026 LearningPad</div>
     """, unsafe_allow_html=True)
 
-# â”€â”€â”€ MAIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─── MAIN ──────────────────────────────────────────────────────────────────────
 proj         = get_active_project()
 proj_name    = proj.get("name", "Untitled")
 storyboards  = proj.get("storyboards", {})
@@ -479,7 +479,7 @@ st.markdown(f"""
             padding:0.6rem 0;border-bottom:1px solid #1e1e3a;margin-bottom:1rem;">
   <div style="display:flex;align-items:center;gap:10px;">
     <span style="font-size:14px;font-weight:600;color:#94a3b8;">{proj_name}</span>
-    <span style="color:#334155;">â€º</span>
+    <span style="color:#334155;">›</span>
     <span style="font-size:14px;font-weight:700;color:#f1f5f9;">
       {active_sb['name'] if active_sb else 'Select a Storyboard'}
     </span>
@@ -491,18 +491,18 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 default_tab = 1 if st.session_state.goto_editor else 0
-tabs = st.tabs(["ðŸ“‹ Storyboards", "ðŸŽ¬ Editor", "ðŸ“¦ Export / Import"])
+tabs = st.tabs(["📋 Storyboards", "🎬 Editor", "📦 Export / Import"])
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# TAB 0 â€” STORYBOARD LIST
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════
+# TAB 0 — STORYBOARD LIST
+# ════════════════════════════════════════════════════════════
 with tabs[0]:
     c_form, _ = st.columns([3, 5])
     with c_form:
         new_sb_name = st.text_input("New storyboard name", placeholder="Untitled Storyboard", key="new_sb_name")
         ca, cb = st.columns(2)
         with ca:
-            if st.button("ï¼‹ New Storyboard", key="new_sb_btn", use_container_width=True):
+            if st.button("＋ New Storyboard", key="new_sb_btn", use_container_width=True):
                 name = new_sb_name.strip() or f"Storyboard {len(storyboards)+1}"
                 sbid = str(uuid.uuid4())
                 st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
@@ -545,17 +545,17 @@ with tabs[0]:
             with ci:
                 c = '#93c5fd' if is_open else '#e2e8f0'
                 st.markdown(f"""<div style="padding:0.5rem 0;">
-                  <div style="font-size:14px;font-weight:600;color:{c};">{'â–¸ ' if is_open else ''}{sb['name']}</div>
-                  <div style="font-size:12px;color:#475569;">{sb.get('created','')} Â· {n_sc} scene{'s' if n_sc!=1 else ''}</div>
+                  <div style="font-size:14px;font-weight:600;color:{c};">{'▸ ' if is_open else ''}{sb['name']}</div>
+                  <div style="font-size:12px;color:#475569;">{sb.get('created','')} · {n_sc} scene{'s' if n_sc!=1 else ''}</div>
                 </div>""", unsafe_allow_html=True)
             with co:
-                if st.button("Open â†’", key=f"open_{sbid}", use_container_width=True):
+                if st.button("Open →", key=f"open_{sbid}", use_container_width=True):
                     st.session_state.active_storyboard = sbid
                     st.session_state.editing_scene = None
                     st.session_state.goto_editor = True
                     st.rerun()
             with cd:
-                if st.button("ðŸ—‘", key=f"del_{sbid}", use_container_width=True):
+                if st.button("🗑", key=f"del_{sbid}", use_container_width=True):
                     del st.session_state.projects[st.session_state.active_project]["storyboards"][sbid]
                     if active_sb_id == sbid:
                         st.session_state.active_storyboard = None
@@ -563,15 +563,15 @@ with tabs[0]:
                     st.rerun()
             st.markdown('<hr style="margin:4px 0;border-color:#1e1e3a;">', unsafe_allow_html=True)
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# TAB 1 â€” EDITOR
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════
+# TAB 1 — EDITOR
+# ════════════════════════════════════════════════════════════
 with tabs[default_tab if default_tab == 1 else 1]:
     if not active_sb:
         st.info("Open or create a storyboard from the **Storyboards** tab.")
     else:
         has_scenes = bool(active_sb.get("scenes"))
-        with st.expander("âš™ï¸  Generate / Input Controls", expanded=not has_scenes):
+        with st.expander("⚙️  Generate / Input Controls", expanded=not has_scenes):
             c1, c2 = st.columns(2)
             with c1:
                 num_scenes = st.slider("Scenes to generate", 3, 12, 6, key="num_scenes_slider")
@@ -580,38 +580,38 @@ with tabs[default_tab if default_tab == 1 else 1]:
                 final_text = ""
                 if input_type == "Plain Text":
                     final_text = st.text_area("Paste content", height=130,
-                        placeholder="e.g. Working of a Steam Engine, Photosynthesisâ€¦", key="plain_text_input")
+                        placeholder="e.g. Working of a Steam Engine, Photosynthesis…", key="plain_text_input")
                     st.caption(f"{len(final_text)} chars")
                 else:
                     pdf_up = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_uploader")
                     if pdf_up:
                         reader = PyPDF2.PdfReader(pdf_up)
                         for pg in reader.pages: final_text += (pg.extract_text() or "")
-                        st.success(f"PDF extracted Â· {len(final_text)} chars")
+                        st.success(f"PDF extracted · {len(final_text)} chars")
             gc, cc = st.columns(2)
             with gc:
-                gen_btn = st.button(f"ðŸš€ Generate {num_scenes} Scenes", key="gen_btn", use_container_width=True)
+                gen_btn = st.button(f"🚀 Generate {num_scenes} Scenes", key="gen_btn", use_container_width=True)
             with cc:
-                clr_btn = st.button("âœ• Clear All Scenes", key="clear_btn", use_container_width=True)
+                clr_btn = st.button("✕ Clear All Scenes", key="clear_btn", use_container_width=True)
             if clr_btn:
                 save_scenes([]); st.session_state.editing_scene = None; st.rerun()
             if gen_btn:
                 if not final_text.strip():
                     st.warning("Paste content or upload a PDF first.")
                 else:
-                    with st.spinner(f"Generating {num_scenes} scenes with Groqâ€¦"):
+                    with st.spinner(f"Generating {num_scenes} scenes with Groq…"):
                         new_sc = generate_scenes_groq(final_text, num_scenes)
                     if new_sc:
                         save_scenes(new_sc); st.session_state.editing_scene = None
                         st.session_state.goto_editor = True
-                        st.success(f"âœ“ {len(new_sc)} scenes generated!"); st.rerun()
+                        st.success(f"✓ {len(new_sc)} scenes generated!"); st.rerun()
 
         scenes = active_sb.get("scenes", [])
 
         if not scenes:
             st.markdown("""<div style="text-align:center;padding:5rem 2rem;color:#334155;
                 border:1px dashed #1e1e3a;border-radius:16px;margin-top:1rem;">
-              <div style="font-size:3rem;">ðŸŽž</div>
+              <div style="font-size:3rem;">🎞</div>
               <div style="font-size:15px;font-weight:600;color:#475569;margin-top:0.5rem;">No scenes yet</div>
               <div style="font-size:13px;margin-top:0.3rem;">Expand the controls above and hit Generate.</div>
             </div>""", unsafe_allow_html=True)
@@ -619,41 +619,41 @@ with tabs[default_tab if default_tab == 1 else 1]:
             n_images  = sum(1 for s in scenes if s.get("scene_image"))
             n_missing = len(scenes) - n_images
 
-            # â”€â”€ Header bar + Generate All button
+            # ── Header bar + Generate All button
             hc1, hc2 = st.columns([3, 1])
             with hc1:
                 st.markdown(f"""
                 <div style="padding:0.6rem 1rem;background:#0d0d1a;border:1px solid #1e1e3a;
                             border-radius:12px;margin:0.5rem 0 0 0;">
-                  <span style="font-size:13px;font-weight:700;color:#e2e8f0;">ðŸ“‹ {active_sb['name']}</span>
+                  <span style="font-size:13px;font-weight:700;color:#e2e8f0;">📋 {active_sb['name']}</span>
                   <span style="font-size:12px;color:#475569;font-family:'JetBrains Mono',monospace;margin-left:16px;">
-                    {len(scenes)} SCENES &nbsp;Â·&nbsp; {n_images} IMAGES
-                    {f"&nbsp;Â·&nbsp; <span style='color:#f59e0b;'>{n_missing} MISSING</span>" if n_missing else ""}
+                    {len(scenes)} SCENES &nbsp;·&nbsp; {n_images} IMAGES
+                    {f"&nbsp;·&nbsp; <span style='color:#f59e0b;'>{n_missing} MISSING</span>" if n_missing else ""}
                   </span>
                 </div>""", unsafe_allow_html=True)
             with hc2:
-                gen_all_lbl = f"ðŸ–¼ Generate All ({n_missing})" if n_missing else "ðŸ”„ Regen All"
+                gen_all_lbl = f"🖼 Generate All ({n_missing})" if n_missing else "🔄 Regen All"
                 if st.button(gen_all_lbl, key="gen_all_btn", use_container_width=True):
                     st.session_state.gen_all_images = True
                     st.rerun()
 
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-            # â”€â”€ GENERATE ALL FLOW
+            # ── GENERATE ALL FLOW
             if st.session_state.gen_all_images:
                 st.session_state.gen_all_images = False
                 targets = [i for i, s in enumerate(scenes) if not s.get("scene_image")]
                 if not targets:
                     targets = list(range(len(scenes)))  # regen all if all exist
                 total    = len(targets)
-                prog_bar = st.progress(0, text="Startingâ€¦")
+                prog_bar = st.progress(0, text="Starting…")
                 stat_txt = st.empty()
                 for step, idx in enumerate(targets):
                     sc    = scenes[idx]
                     snum  = sc.get("scene_number", idx+1)
                     ttl   = sc.get("title","")
                     stat_txt.markdown(
-                        f'<div style="font-size:12px;color:#94a3b8;">Generating Scene {snum:02d} â€” <em>{ttl}</em>â€¦</div>',
+                        f'<div style="font-size:12px;color:#94a3b8;">Generating Scene {snum:02d} — <em>{ttl}</em>…</div>',
                         unsafe_allow_html=True)
                     slot = st.empty()
                     b64  = generate_scene_image(sc, slot)
@@ -663,12 +663,12 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     prog_bar.progress(int((step+1)/total*100),
                                       text=f"Scene {snum:02d} done  ({step+1}/{total})")
                     time.sleep(0.3)
-                prog_bar.progress(100, text="âœ“ All images done!")
-                stat_txt.success(f"âœ“ {total} images generated!")
+                prog_bar.progress(100, text="✓ All images done!")
+                stat_txt.success(f"✓ {total} images generated!")
                 time.sleep(1.2)
                 st.rerun()
 
-            # â”€â”€ SCENE CARDS
+            # ── SCENE CARDS
             for i, sc in enumerate(scenes):
                 assets  = get_scene_assets(sc)
                 labels  = sc.get("labels", [])
@@ -692,15 +692,15 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     st.markdown(f'<div style="font-size:15px;font-weight:700;color:#f1f5f9;padding-top:4px;">{title}</div>',
                                 unsafe_allow_html=True)
                 with h3:
-                    if st.button("âœ… Done" if editing else "âœï¸ Edit Scene",
+                    if st.button("✅ Done" if editing else "✏️ Edit Scene",
                                  key=f"edit_toggle_{i}", use_container_width=True):
                         st.session_state.editing_scene = None if editing else i
                         st.rerun()
                 with h4:
-                    gen_img = st.button("ðŸ”„ Regenerate Image" if img_b64 else "ðŸ–¼ Generate Image",
+                    gen_img = st.button("🔄 Regenerate Image" if img_b64 else "🖼 Generate Image",
                                         key=f"gen_img_{i}", use_container_width=True)
 
-                # â”€â”€ EDIT MODE
+                # ── EDIT MODE
                 if editing:
                     st.markdown('<div style="background:#0a0a1a;border:1px solid #2563eb;border-radius:12px;padding:1rem 1.1rem;margin:0.6rem 0;">',
                                 unsafe_allow_html=True)
@@ -715,7 +715,7 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     new_anim = st.text_area("Animation Logic", value=anim, height=90, key=f"e_anim_{i}")
                     sv, _ = st.columns([1, 4])
                     with sv:
-                        if st.button("ðŸ’¾ Save Changes", key=f"save_{i}", use_container_width=True):
+                        if st.button("💾 Save Changes", key=f"save_{i}", use_container_width=True):
                             scenes[i].update({
                                 "title":              new_title.strip(),
                                 "assets":             [x.strip() for x in new_assets.split(",") if x.strip()],
@@ -729,7 +729,7 @@ with tabs[default_tab if default_tab == 1 else 1]:
                             st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
-                # â”€â”€ DISPLAY MODE
+                # ── DISPLAY MODE
                 else:
                     c_img, c_a, c_b, c_n = st.columns([1, 1, 1, 2])
                     with c_img:
@@ -739,18 +739,18 @@ with tabs[default_tab if default_tab == 1 else 1]:
                             st.markdown("""<div style="height:145px;background:#0d0d1a;border:1px dashed #2d2d5a;
                                 border-radius:8px;display:flex;align-items:center;justify-content:center;
                                 flex-direction:column;gap:6px;">
-                              <span style="font-size:2rem;opacity:0.4;">ðŸ–¼</span>
+                              <span style="font-size:2rem;opacity:0.4;">🖼</span>
                               <span style="font-size:11px;color:#334155;">No image yet</span>
                             </div>""", unsafe_allow_html=True)
                     with c_a:
-                        tags = "".join([pill(a,"#0f1f3d","#60a5fa") for a in assets]) or '<span style="color:#334155;font-size:11px;">â€”</span>'
-                        st.markdown(section_box("ðŸ”· 3D Assets (GLB)","#3b82f6",f'<div style="line-height:1.9;">{tags}</div>',"#0d1117","#1e3a5f"), unsafe_allow_html=True)
+                        tags = "".join([pill(a,"#0f1f3d","#60a5fa") for a in assets]) or '<span style="color:#334155;font-size:11px;">—</span>'
+                        st.markdown(section_box("🔷 3D Assets (GLB)","#3b82f6",f'<div style="line-height:1.9;">{tags}</div>',"#0d1117","#1e3a5f"), unsafe_allow_html=True)
                     with c_b:
-                        ltags = "".join([pill(l,"#0f2d1a","#4ade80") for l in labels]) or '<span style="color:#334155;font-size:11px;">â€”</span>'
-                        st.markdown(section_box("ðŸŸ¢ UI Labels","#4ade80",f'<div style="line-height:1.9;">{ltags}</div>',"#0d1a12","#1a3d25"), unsafe_allow_html=True)
+                        ltags = "".join([pill(l,"#0f2d1a","#4ade80") for l in labels]) or '<span style="color:#334155;font-size:11px;">—</span>'
+                        st.markdown(section_box("🟢 UI Labels","#4ade80",f'<div style="line-height:1.9;">{ltags}</div>',"#0d1a12","#1a3d25"), unsafe_allow_html=True)
                     with c_n:
-                        st.markdown(section_box("ðŸŽ™ Narration","#fb7185",
-                            f'<div style="font-size:12px;color:#f1f5f9;line-height:1.75;font-style:italic;">{narr or "â€”"}</div>',
+                        st.markdown(section_box("🎙 Narration","#fb7185",
+                            f'<div style="font-size:12px;color:#f1f5f9;line-height:1.75;font-style:italic;">{narr or "—"}</div>',
                             "#1a0d1a","#3d1a2e",left_accent="#fb7185"), unsafe_allow_html=True)
 
                     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -762,29 +762,29 @@ with tabs[default_tab if default_tab == 1 else 1]:
                             f'<span style="min-width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);color:#000;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">{idx2+1}</span>'
                             f'<span style="font-size:12px;color:#fde68a;line-height:1.5;">{line.lstrip("0123456789.) ") if line[:1].isdigit() else line}</span></div>'
                             for idx2, line in enumerate(al2)
-                        ]) or '<span style="color:#334155;font-size:11px;">â€”</span>'
-                        st.markdown(section_box("âš¡ Animation Logic (GLB Safe)","#f59e0b",steps,"#1a1400","#3d2e00",left_accent="#f59e0b"), unsafe_allow_html=True)
+                        ]) or '<span style="color:#334155;font-size:11px;">—</span>'
+                        st.markdown(section_box("⚡ Animation Logic (GLB Safe)","#f59e0b",steps,"#1a1400","#3d2e00",left_accent="#f59e0b"), unsafe_allow_html=True)
                     with c_vd:
-                        st.markdown(section_box("ðŸŽ¨ Visual Description","#a78bfa",
-                            f'<div style="font-size:12px;color:#c4b5fd;line-height:1.7;">{vd or "â€”"}</div>',
+                        st.markdown(section_box("🎨 Visual Description","#a78bfa",
+                            f'<div style="font-size:12px;color:#c4b5fd;line-height:1.7;">{vd or "—"}</div>',
                             "#120d1a","#2d1a4a",left_accent="#a78bfa"), unsafe_allow_html=True)
 
-                # â”€â”€ Single image generation
+                # ── Single image generation
                 if gen_img:
-                    with st.spinner(f"Generating image for Scene {snum:02d}â€¦"):
+                    with st.spinner(f"Generating image for Scene {snum:02d}…"):
                         slot = st.empty()
                         b64  = generate_scene_image(sc, slot)
                     if b64:
                         scenes[i]["scene_image"] = b64
                         save_scenes(scenes)
-                        st.success(f"âœ“ Image generated for Scene {snum:02d}!")
+                        st.success(f"✓ Image generated for Scene {snum:02d}!")
                         st.rerun()
 
                 # Delete + divider
                 st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
                 _, dc = st.columns([8, 1])
                 with dc:
-                    if st.button("ðŸ—‘ Delete", key=f"del_scene_{i}", use_container_width=True):
+                    if st.button("🗑 Delete", key=f"del_scene_{i}", use_container_width=True):
                         scenes.pop(i); save_scenes(scenes)
                         if st.session_state.editing_scene == i:
                             st.session_state.editing_scene = None
@@ -792,9 +792,9 @@ with tabs[default_tab if default_tab == 1 else 1]:
                 st.markdown("""<div style="height:1px;background:linear-gradient(90deg,#2563eb22,#7c3aed55,#2563eb22);
                     margin:0.75rem 0 1.4rem 0;border-radius:2px;"></div>""", unsafe_allow_html=True)
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# TAB 2 â€” EXPORT / IMPORT
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ════════════════════════════════════════════════════════════
+# TAB 2 — EXPORT / IMPORT
+# ════════════════════════════════════════════════════════════
 with tabs[2]:
     if not active_sb:
         st.info("Open a storyboard first to export it.")
@@ -818,25 +818,25 @@ with tabs[2]:
                 if not inc_imgs:
                     for e in export_no_img: e.pop("scene_image", None)
                 payload_out = {"name": active_sb["name"], "created": active_sb.get("created",""), "scenes": export_no_img}
-                st.download_button("ðŸ“¥ Download Storyboard JSON",
+                st.download_button("📥 Download Storyboard JSON",
                     data=json.dumps(payload_out, indent=2),
                     file_name=f"{active_sb['name'].replace(' ','_')}_storyboard.json",
                     mime="application/json", use_container_width=True)
 
                 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
                 st.markdown('<div style="font-size:10px;color:#475569;margin-bottom:6px;">PDF includes all scene data + images. Requires <code>reportlab</code> and <code>Pillow</code>.</div>', unsafe_allow_html=True)
-                if st.button("ðŸ“„ Generate PDF Storyboard", key="gen_pdf_btn", use_container_width=True):
-                    with st.spinner("Building PDFâ€¦"):
+                if st.button("📄 Generate PDF Storyboard", key="gen_pdf_btn", use_container_width=True):
+                    with st.spinner("Building PDF…"):
                         pdf_bytes, pdf_err = generate_storyboard_pdf(active_sb["name"], scenes)
                     if pdf_bytes:
                         st.session_state["_pdf_bytes"] = pdf_bytes
                         st.session_state["_pdf_name"]  = active_sb["name"]
-                        st.success(f"âœ“ PDF ready â€” {len(pdf_bytes)//1024} KB"); st.rerun()
+                        st.success(f"✓ PDF ready — {len(pdf_bytes)//1024} KB"); st.rerun()
                     else:
                         st.error(f"PDF failed: {pdf_err}")
 
                 if "_pdf_bytes" in st.session_state and st.session_state.get("_pdf_name") == active_sb["name"]:
-                    st.download_button("â¬‡ï¸ Download PDF",
+                    st.download_button("⬇️ Download PDF",
                         data=st.session_state["_pdf_bytes"],
                         file_name=f"{active_sb['name'].replace(' ','_')}_storyboard.pdf",
                         mime="application/pdf", use_container_width=True)
@@ -849,7 +849,7 @@ with tabs[2]:
                     f"| {s.get('scene_number','?')} | {s.get('title','')} "
                     f"| {', '.join(get_scene_assets(s))} "
                     f"| {', '.join(s.get('labels',[]))} "
-                    f"| {s.get('narration','')[:80]}{'â€¦' if len(s.get('narration',''))>80 else ''} |"
+                    f"| {s.get('narration','')[:80]}{'…' if len(s.get('narration',''))>80 else ''} |"
                     for s in scenes
                 ]
                 st.markdown("\n".join([hdr, sep2] + rows_md))
@@ -870,7 +870,7 @@ with tabs[2]:
                     else:
                         st.error("Unrecognised format."); imp_sc = []
                     if imp_sc:
-                        if st.button("â¬† Apply Imported Scenes", key="apply_import"):
+                        if st.button("⬆ Apply Imported Scenes", key="apply_import"):
                             save_scenes(imp_sc); st.session_state.editing_scene = None
                             st.session_state.goto_editor = True; st.rerun()
                 except Exception as e:
