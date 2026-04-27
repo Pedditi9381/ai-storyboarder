@@ -130,7 +130,7 @@ Each item MUST have these keys:
   "visual_description": "<2-3 sentences: camera, lighting, layout, colours>",
   "narration": "<full narrator script 2-4 sentences explaining the concept>"
 }}
-Rules: assets = 3-6 lowercase GLB names. labels = 2-5 short UI strings. animation = numbered steps each on new line. narration = full proper sentences."""
+Rules: assets = 3-6 lowercase GLB names. labels = 2-5 short UI strings. animation = numbered steps separated by \\n within the string value (NOT literal newlines). narration = full proper sentences. CRITICAL: Return valid JSON only — all string values must be on one line, use \\n for line breaks inside strings, never embed raw newlines or tab characters inside JSON string values."""
     payload = {
         "model": "llama-3.1-8b-instant",
         "messages": [
@@ -144,9 +144,58 @@ Rules: assets = 3-6 lowercase GLB names. labels = 2-5 short UI strings. animatio
         resp = requests.post(GROQ_URL, headers=headers, json=payload, timeout=60)
         if resp.status_code == 200:
             raw = resp.json()["choices"][0]["message"]["content"]
-            raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-            return normalise_scenes(json.loads(raw))
+            # Strip markdown fences
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```", 2)[-1] if raw.count("```") >= 2 else raw
+                raw = raw.lstrip("json").strip()
+                if raw.endswith("```"):
+                    raw = raw[:-3].strip()
+            # Fix control characters inside JSON strings:
+            # Replace literal newlines/tabs inside the JSON text with escaped versions
+            import re
+            def fix_control_chars(s):
+                # Find all string values and escape control chars within them
+                result = []
+                in_string = False
+                escape_next = False
+                for ch in s:
+                    if escape_next:
+                        result.append(ch)
+                        escape_next = False
+                        continue
+                    if ch == '\\':
+                        result.append(ch)
+                        escape_next = True
+                        continue
+                    if ch == '"' and not escape_next:
+                        in_string = not in_string
+                        result.append(ch)
+                        continue
+                    if in_string:
+                        if ch == '\n':
+                            result.append('\\n')
+                        elif ch == '\r':
+                            result.append('\\r')
+                        elif ch == '\t':
+                            result.append('\\t')
+                        else:
+                            result.append(ch)
+                    else:
+                        result.append(ch)
+                return ''.join(result)
+
+            raw = fix_control_chars(raw)
+            scenes = json.loads(raw)
+            return normalise_scenes(scenes)
         st.error(f"Groq error {resp.status_code}: {resp.text[:200]}")
+        return None
+    except json.JSONDecodeError as e:
+        st.error(f"JSON parse error: {e}")
+        # Show a snippet around the error location for debugging
+        char = e.pos
+        snippet = raw[max(0, char-40):char+40] if 'raw' in dir() else ""
+        st.code(f"...{snippet}...", language="text")
         return None
     except Exception as e:
         st.error(f"Generation failed: {e}")
