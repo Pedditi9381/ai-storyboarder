@@ -492,7 +492,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
   <div style="display:flex;align-items:center;gap:10px;">
     <span style="font-size:14px;font-weight:600;color:#94a3b8;">{proj_name}</span>
-    <span style="color:#334155;">›</span>
+    <span style="color:#334155;">&gt;</span>
     <span style="font-size:14px;font-weight:700;color:#f1f5f9;">
       {active_sb['name'] if active_sb else 'Select a Storyboard'}
     </span>
