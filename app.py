@@ -622,12 +622,14 @@ with tabs[default_tab if default_tab == 1 else 1]:
         scenes = active_sb.get("scenes", [])
 
         if not scenes:
-            st.markdown("""<div style="text-align:center;padding:5rem 2rem;color:#334155;
-                border:1px dashed #1e1e3a;border-radius:16px;margin-top:1rem;">
-              <div style="font-size:3rem;">🎞</div>
-              <div style="font-size:15px;font-weight:600;color:#475569;margin-top:0.5rem;">No scenes yet</div>
-              <div style="font-size:13px;margin-top:0.3rem;">Expand the controls above and hit Generate.</div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown("""
+                <div style="text-align:center;padding:5rem 2rem;color:#334155;
+                            border:1px dashed #1e1e3a;border-radius:16px;margin-top:1rem;">
+                  <div style="font-size:3rem;">🎞️</div>
+                  <div style="font-size:15px;font-weight:600;color:#475569;margin-top:0.5rem;">No scenes yet</div>
+                  <div style="font-size:13px;margin-top:0.3rem;">Expand the controls above and hit Generate.</div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             n_images  = sum(1 for s in scenes if s.get("scene_image"))
             n_missing = len(scenes) - n_images
