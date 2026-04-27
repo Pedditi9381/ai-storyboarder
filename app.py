@@ -468,7 +468,7 @@ with st.sidebar:
       Groq <span style="color:{'#4ade80' if groq_ok else '#f87171'};">{'✓ Connected' if groq_ok else '✗ Add GROQ_API_KEY'}</span><br>
       Gemini <span style="color:{'#4ade80' if gem_ok else '#f59e0b'};">{'✓ Connected' if gem_ok else '⚠ Pollinations fallback'}</span>
     </div>
-    <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">© 2026 LearningPad</div>
+    <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">&copy; 2026 LearningPad</div>
     """, unsafe_allow_html=True)
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
