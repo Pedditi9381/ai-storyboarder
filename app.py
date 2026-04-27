@@ -559,7 +559,7 @@ with tabs[0]:
                 c = '#93c5fd' if is_open else '#e2e8f0'
                 st.markdown(f"""<div style="padding:0.5rem 0;">
                   <div style="font-size:14px;font-weight:600;color:{c};">{'▸ ' if is_open else ''}{sb['name']}</div>
-                  <div style="font-size:12px;color:#475569;">{sb.get('created','')} · {n_sc} scene{'s' if n_sc!=1 else ''}</div>
+                 <div style="font-size:12px;color:#475569;">{sb.get('created','')} | {n_sc} scene{'s' if n_sc!=1 else ''}</div>
                 </div>""", unsafe_allow_html=True)
             with co:
                 if st.button("Open →", key=f"open_{sbid}", use_container_width=True):
