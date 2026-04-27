@@ -75,12 +75,12 @@ except Exception:
     GROQ_API_KEY = None
 
 try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    KREA_API_KEY = st.secrets["KREA_API_KEY"]
 except Exception:
-    GEMINI_API_KEY = None
+    KREA_API_KEY = None
 
-GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-GEMINI_IMAGE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
+GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
+KREA_BASE_URL = "https://api.krea.ai"
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def get_active_project():
@@ -201,10 +201,14 @@ Rules: assets = 3-6 lowercase GLB names. labels = 2-5 short UI strings. animatio
         st.error(f"Generation failed: {e}")
         return None
 
-# ─── GEMINI IMAGE GENERATION ───────────────────────────────────────────────────
+# ─── KREA IMAGE GENERATION ─────────────────────────────────────────────────────
 def generate_scene_image(sc):
-    if not GEMINI_API_KEY:
-        st.error("Add GEMINI_API_KEY to Streamlit Secrets.")
+    """
+    Generate a storyboard frame using Krea AI (Flux 1.1 Pro model).
+    Krea API is async: POST to create job → poll until completed → download image.
+    """
+    if not KREA_API_KEY:
+        st.error("Add KREA_API_KEY to Streamlit Secrets.")
         return None
 
     vd     = sc.get("visual_description", "")
@@ -214,52 +218,93 @@ def generate_scene_image(sc):
     narr   = sc.get("narration", "")[:200]
 
     prompt = (
-        f"Generate a 3D educational animation storyboard frame for scene titled '{title}'. "
-        f"Visual layout: {vd} "
-        f"3D models in scene: {assets}. "
-        f"On-screen UI labels visible: {labels}. "
-        f"Educational context: {narr}. "
-        "Art style: dark deep-space studio background (#06060f), clean instructional 3D render, "
-        "vivid neon accent lighting (blue and purple glows), high detail geometry, "
-        "cinematic depth of field, no text overlays, widescreen 16:9 composition."
+        f"3D educational animation storyboard frame, scene titled '{title}'. "
+        f"{vd} "
+        f"3D models visible: {assets}. UI labels on screen: {labels}. "
+        f"Topic: {narr}. "
+        "Style: dark deep-space studio background, clean instructional 3D render, "
+        "vivid neon blue and purple accent lighting, high detail geometry, "
+        "cinematic depth of field, widescreen 16:9, no watermarks, no text overlays."
     )
 
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }],
-        "generationConfig": {
-            "responseModalities": ["IMAGE", "TEXT"],
-        }
+    headers = {
+        "Authorization": f"Bearer {KREA_API_KEY}",
+        "Content-Type": "application/json"
     }
 
+    # ── STEP 1: Submit job ────────────────────────────────────────────────────
     try:
-        url  = f"{GEMINI_IMAGE_URL}?key={GEMINI_API_KEY}"
-        resp = requests.post(url, headers=headers, json=payload, timeout=90)
-
-        if resp.status_code == 200:
-            data = resp.json()
-            # Extract base64 image from response parts
-            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-            for part in parts:
-                inline = part.get("inlineData", {})
-                if inline.get("mimeType", "").startswith("image/"):
-                    return inline["data"]   # base64 string
-            st.warning("Gemini returned no image part. The model may not support image output on your API tier.")
-            return None
-
-        # Parse error nicely
-        try:
-            err = resp.json().get("error", {})
-            msg = err.get("message", resp.text[:300])
-        except Exception:
-            msg = resp.text[:300]
-        st.error(f"Gemini image error {resp.status_code}: {msg}")
+        create_resp = requests.post(
+            f"{KREA_BASE_URL}/generate/image/bfl/flux-1-1-pro",
+            headers=headers,
+            json={
+                "prompt": prompt,
+                "width":  1024,
+                "height": 576,    # 16:9
+                "steps":  28
+            },
+            timeout=30
+        )
+    except Exception as e:
+        st.error(f"Krea request failed: {e}")
         return None
 
+    if create_resp.status_code not in (200, 201):
+        try:
+            msg = create_resp.json()
+        except Exception:
+            msg = create_resp.text[:300]
+        st.error(f"Krea job creation error {create_resp.status_code}: {msg}")
+        return None
+
+    job_id = create_resp.json().get("job_id")
+    if not job_id:
+        st.error(f"Krea returned no job_id: {create_resp.json()}")
+        return None
+
+    # ── STEP 2: Poll until completed (max 120s) ───────────────────────────────
+    import time
+    poll_url = f"{KREA_BASE_URL}/jobs/{job_id}"
+    for attempt in range(40):          # 40 × 3s = 120s max
+        time.sleep(3)
+        try:
+            poll = requests.get(poll_url, headers=headers, timeout=15)
+        except Exception as e:
+            st.error(f"Krea polling failed: {e}")
+            return None
+
+        if poll.status_code != 200:
+            st.error(f"Krea poll error {poll.status_code}: {poll.text[:200]}")
+            return None
+
+        data   = poll.json()
+        status = data.get("status", "")
+
+        if status == "completed":
+            urls = data.get("result", {}).get("urls", [])
+            if not urls:
+                st.warning("Krea job completed but returned no URLs.")
+                return None
+            img_url = urls[0]
+            break
+
+        elif status in ("failed", "cancelled"):
+            st.error(f"Krea job {status}: {data}")
+            return None
+        # else: queued / processing — keep polling
+    else:
+        st.error("Krea image generation timed out after 120s.")
+        return None
+
+    # ── STEP 3: Download image and convert to base64 ──────────────────────────
+    try:
+        img_resp = requests.get(img_url, timeout=30)
+        if img_resp.status_code == 200:
+            return base64.b64encode(img_resp.content).decode("utf-8")
+        st.error(f"Failed to download Krea image: HTTP {img_resp.status_code}")
+        return None
     except Exception as e:
-        st.error(f"Image generation failed: {e}")
+        st.error(f"Image download failed: {e}")
         return None
 
 # ─── SIDEBAR ───────────────────────────────────────────────────────────────────
