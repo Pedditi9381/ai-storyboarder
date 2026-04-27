@@ -80,7 +80,7 @@ except Exception:
     GEMINI_API_KEY = None
 
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict"
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def get_active_project():
@@ -219,19 +219,26 @@ def generate_scene_image(sc):
         "vivid neon accent lighting, high detail, no text overlays."
     )
     headers = {"Content-Type": "application/json"}
+    # Imagen 3 uses the :predict endpoint with instances/parameters format
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}
+        "instances": [{"prompt": prompt}],
+        "parameters": {
+            "sampleCount": 1,
+            "aspectRatio": "16:9",
+            "safetyFilterLevel": "block_few",
+            "personGeneration": "allow_adult"
+        }
     }
     try:
-        resp = requests.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", headers=headers, json=payload, timeout=60)
+        resp = requests.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", headers=headers, json=payload, timeout=90)
         if resp.status_code == 200:
-            for part in resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", []):
-                if part.get("inlineData"):
-                    return part["inlineData"]["data"]
-            st.warning("Gemini returned no image.")
+            data = resp.json()
+            predictions = data.get("predictions", [])
+            if predictions and "bytesBase64Encoded" in predictions[0]:
+                return predictions[0]["bytesBase64Encoded"]
+            st.warning("Imagen returned no image in response.")
             return None
-        st.error(f"Gemini error {resp.status_code}: {resp.text[:300]}")
+        st.error(f"Gemini error {resp.status_code}: {resp.text[:400]}")
         return None
     except Exception as e:
         st.error(f"Image generation failed: {e}")
