@@ -73,7 +73,7 @@ GROQ_API_KEY   = st.secrets.get("GROQ_API_KEY",   None)
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", None)
 
 GROQ_URL        = "https://api.groq.com/openai/v1/chat/completions"
-GEMINI_IMG_URL  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
+GEMINI_IMG_URL  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent"
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def get_active_project():
@@ -209,22 +209,34 @@ Use the two-character sequence backslash-n to represent a line break inside a st
 
 # ─── GEMINI: IMAGE GENERATION ──────────────────────────────────────────────────
 def build_image_prompt(sc):
+    """
+    Craft a prompt that generates a Blender-style 3D Cycles render —
+    clean topology, PBR materials, HDRI lighting — so output looks like
+    a GLB-ready storyboard reference an artist can reproduce in Blender.
+    """
     vd     = sc.get("visual_description", "")
     title  = sc.get("title", "")
     assets = ", ".join(get_scene_assets(sc))
     labels = ", ".join(sc.get("labels", []))
-    narr   = sc.get("narration", "")[:180]
+    narr   = sc.get("narration", "")[:160]
     return (
-        f"3D educational animation storyboard frame titled '{title}'. "
+        f"Blender 3D Cycles render, educational animation storyboard frame, scene titled: {title}. "
         f"Scene layout: {vd} "
-        f"3D models in scene: {assets}. UI labels shown: {labels}. Context: {narr}. "
-        "Art direction: deep-space dark studio (#06060f background), clean instructional 3D render, "
-        "vivid neon blue and purple rim lighting, high-detail geometry, cinematic 16:9 widescreen, "
-        "no embedded text or watermarks."
+        f"Hard-surface 3D models present: {assets}. On-screen annotation labels: {labels}. "
+        f"Educational topic: {narr}. "
+        "Render style: photorealistic Blender Cycles, clean hard-surface meshes with smooth shading, "
+        "visible clean topology with beveled edges suitable for GLB export, "
+        "PBR materials with metallic and roughness maps, "
+        "three-point HDRI studio lighting (warm amber key light, cool blue fill, purple rim light), "
+        "pure dark charcoal studio background, ambient occlusion baked, "
+        "subsurface scattering on organic materials, cinematic depth of field f/4, "
+        "16:9 widescreen composition, models look ready to export to Three.js or Babylon.js as .glb, "
+        "no text overlays, no watermarks, no 2D cartoon style, no illustrations."
     )
 
+
 def generate_scene_image_gemini(sc):
-    """Generate image via Gemini 2.0 Flash (native image output)."""
+    """Generate image via Gemini 2.0 Flash Image Generation (correct model name)."""
     if not GEMINI_API_KEY:
         return None, "No GEMINI_API_KEY in secrets."
 
@@ -240,26 +252,35 @@ def generate_scene_image_gemini(sc):
             timeout=90
         )
         if resp.status_code == 200:
-            parts = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            parts = (resp.json()
+                     .get("candidates", [{}])[0]
+                     .get("content", {})
+                     .get("parts", []))
             for part in parts:
                 inline = part.get("inlineData", {})
                 if inline.get("mimeType", "").startswith("image/"):
                     return inline["data"], None
             return None, "Gemini responded but returned no image part."
-        err_msg = resp.json().get("error", {}).get("message", resp.text[:300])
-        return None, f"Gemini {resp.status_code}: {err_msg}"
+        err = resp.json().get("error", {}).get("message", resp.text[:300])
+        return None, f"Gemini {resp.status_code}: {err}"
     except Exception as e:
         return None, str(e)
 
+
 def generate_scene_image_pollinations(sc):
-    """Fallback: Pollinations.ai — free, no API key, returns image directly."""
-    prompt = build_image_prompt(sc)
-    # URL-encode prompt, keep it under 500 chars
-    encoded = requests.utils.quote(prompt[:480])
-    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=576&nologo=true&model=flux"
+    """
+    Fallback: Pollinations.ai Flux model — free, no API key.
+    enhance=true improves prompt fidelity. seed=-1 = random.
+    """
+    prompt  = build_image_prompt(sc)
+    encoded = requests.utils.quote(prompt[:700])
+    url = (
+        f"https://image.pollinations.ai/prompt/{encoded}"
+        f"?width=1024&height=576&model=flux&nologo=true&enhance=true&seed=-1"
+    )
     try:
-        resp = requests.get(url, timeout=90)
-        if resp.status_code == 200 and resp.headers.get("content-type","").startswith("image/"):
+        resp = requests.get(url, timeout=120)
+        if resp.status_code == 200 and "image" in resp.headers.get("content-type", ""):
             return base64.b64encode(resp.content).decode("utf-8"), None
         return None, f"Pollinations {resp.status_code}"
     except Exception as e:
