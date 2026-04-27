@@ -49,12 +49,12 @@ hr { border-color:#1e1e3a !important; }
 .zoom-hint { position:absolute; bottom:6px; right:8px; font-size:10px; color:rgba(255,255,255,0.6); background:rgba(0,0,0,0.6); border-radius:4px; padding:2px 7px; pointer-events:none; }
 
 /* ── Lightbox ── */
-#lpv-lightbox { display:none; position:fixed; z-index:99999; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; backdrop-filter:blur(10px); }
+#lpv-lightbox { display:none; position:fixed; z-index:99999; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; backdrop-filter:blur(10px); padding:24px; box-sizing:border-box; }
 #lpv-lightbox.open { display:flex; }
-#lpv-lightbox img { max-width:92vw; max-height:88vh; border-radius:12px; box-shadow:0 0 60px rgba(59,130,246,0.4),0 0 0 1px #3b82f6; object-fit:contain; }
+#lpv-lightbox img { max-width:92vw; max-height:78vh; border-radius:12px; box-shadow:0 0 60px rgba(59,130,246,0.4),0 0 0 1px #3b82f6; object-fit:contain; }
 #lpv-lb-close { position:fixed; top:18px; right:26px; font-size:34px; color:#e2e8f0; cursor:pointer; background:none; border:none; line-height:1; opacity:0.7; transition:opacity 0.15s; }
 #lpv-lb-close:hover { opacity:1; }
-#lpv-lb-cap { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); font-size:12px; color:#94a3b8; background:rgba(0,0,0,0.75); padding:6px 18px; border-radius:20px; white-space:nowrap; font-family:'JetBrains Mono',monospace; letter-spacing:0.05em; }
+#lpv-lb-cap { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); font-size:12px; color:#94a3b8; background:rgba(0,0,0,0.75); padding:10px 18px; border-radius:20px; white-space:normal; max-width:92vw; text-align:center; overflow-wrap:anywhere; font-family:'JetBrains Mono',monospace; letter-spacing:0.05em; }
 </style>
 
 <!-- Lightbox DOM -->
@@ -66,7 +66,8 @@ hr { border-color:#1e1e3a !important; }
 <script>
 function openLB(src, cap) {
   document.getElementById('lpv-lb-img').src = src;
-  document.getElementById('lpv-lb-cap').textContent = cap || '';
+  // IMPORTANT: allow line breaks for Labels + Voice-over
+  document.getElementById('lpv-lb-cap').innerHTML = (cap || '').replace(/\\n/g, '<br/>');
   document.getElementById('lpv-lightbox').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -147,10 +148,22 @@ def section_box(title, color, html, bg, border, left_accent=None):
             f'<div style="font-size:9px;font-weight:800;letter-spacing:0.15em;color:{color};'
             f'text-transform:uppercase;margin-bottom:7px;">{title}</div>{html}</div>')
 
-def clickable_img(b64, scene_title, snum):
+# ✅ UPDATED clickable_img: include labels + narration in the lightbox caption
+def clickable_img(b64, scene_title, snum, sc):
     uri = f"data:image/png;base64,{b64}"
+
+    labels = sc.get("labels", [])
+    narration = sc.get("narration", "").strip()
+
     cap = f"Scene {snum:02d}  ·  {scene_title}".replace("'", "&#39;")
-    return (f'<div class="scene-img-wrap" onclick="openLB(\'{uri}\',\'{cap}\')">'
+    if labels:
+        cap += f"\\nLabels: {', '.join(labels)}".replace("'", "&#39;")
+    if narration:
+        # keep it readable; limit length a bit
+        narr_short = narration if len(narration) <= 420 else narration[:420] + "…"
+        cap += f"\\nVoice-over: {narr_short}".replace("'", "&#39;")
+
+    return (f'<div class="scene-img-wrap" onclick="openLB(\\'{uri}\\',\\'{cap}\\')">'
             f'<img src="{uri}" alt="{cap}"/>'
             f'<span class="zoom-hint">🔍 Click to expand</span></div>')
 
@@ -212,10 +225,6 @@ def generate_scenes_groq(text, num_scenes):
 
 # ─── IMAGE PROMPT: ANIMATION-LOGIC DRIVEN ─────────────────────────────────────
 def build_image_prompt(sc):
-    """
-    The ANIMATION LOGIC is the primary driver of what to depict.
-    Assets, visual description, and narration provide supporting context.
-    """
     title  = sc.get("title", "")
     assets = ", ".join(get_scene_assets(sc))
     labels = ", ".join(sc.get("labels", []))
@@ -241,7 +250,7 @@ def build_image_prompt(sc):
         "no 2D art, no cartoon, no text overlays, no watermarks."
     )
 
-# ─── GEMINI: SILENT QUOTA HANDLING ────────────────────────────────────────────
+# ─── GEMINI: SILENT QUOTA HANDLING ──────────────────────────────────────────────
 def _is_quota(code, msg):
     return code == 429 or "quota" in msg.lower() or "rate" in msg.lower()
 
@@ -273,7 +282,7 @@ def generate_scene_image_gemini(sc):
                 try: msg = resp.json().get("error",{}).get("message","")
                 except: msg = resp.text[:200]
                 if _is_quota(resp.status_code, msg):
-                    return None, "quota"   # silent signal
+                    return None, "quota"
                 last = f"{model}_{resp.status_code}"; break
         except Exception as e:
             last = f"{model}_exc_{e}"; continue
@@ -292,10 +301,6 @@ def generate_scene_image_pollinations(sc):
         return None, str(e)
 
 def generate_scene_image(sc, status_slot=None):
-    """
-    Try Gemini; silently fall back to Pollinations on quota/fail.
-    Never shows the long 429 error message.
-    """
     def log(m):
         if status_slot: status_slot.caption(m)
 
@@ -308,7 +313,6 @@ def generate_scene_image(sc, status_slot=None):
             log("Gemini quota reached — switching to Pollinations…")
         elif err not in ("no_key", "no_models", "200_no_image"):
             log("Gemini unavailable — switching to Pollinations…")
-        # fall through silently
 
     b64, err = generate_scene_image_pollinations(sc)
     if b64:
@@ -324,48 +328,64 @@ def generate_storyboard_pdf(sb_name, scenes):
         from reportlab.lib.units import mm
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.colors import HexColor, white
-        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-            Table, TableStyle, HRFlowable, Image as RLImage, KeepTogether)
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            HRFlowable, Image as RLImage, KeepTogether
+        )
         from reportlab.lib.enums import TA_CENTER
         from PIL import Image as PILImage
     except ImportError:
         return None, "reportlab or Pillow not installed."
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+    doc = SimpleDocTemplate(
+        buf, pagesize=landscape(A4),
         leftMargin=15*mm, rightMargin=15*mm, topMargin=12*mm, bottomMargin=12*mm,
-        title=f"LPVision — {sb_name}", author="LPVision Studio")
+        title=f"LPVision — {sb_name}", author="LPVision Studio"
+    )
 
-    C = dict(bg=HexColor("#06060f"), card=HexColor("#0d0d1a"), bord=HexColor("#1e1e3a"),
-             blue=HexColor("#3b82f6"), purp=HexColor("#8b5cf6"), green=HexColor("#4ade80"),
-             ambr=HexColor("#f59e0b"), pink=HexColor("#fb7185"), text=HexColor("#e2e8f0"),
-             mute=HexColor("#64748b"))
+    C = dict(
+        bg=HexColor("#06060f"), card=HexColor("#0d0d1a"), bord=HexColor("#1e1e3a"),
+        blue=HexColor("#3b82f6"), purp=HexColor("#8b5cf6"), green=HexColor("#4ade80"),
+        ambr=HexColor("#f59e0b"), pink=HexColor("#fb7185"), text=HexColor("#e2e8f0"),
+        mute=HexColor("#64748b")
+    )
 
     def S(n, **k):
         b = dict(fontName="Helvetica", fontSize=9, leading=13, textColor=C["text"], spaceAfter=2)
-        b.update(k); return ParagraphStyle(n, **b)
+        b.update(k)
+        return ParagraphStyle(n, **b)
 
     story = [
         Paragraph("LPVision Studio", S("H", fontSize=22, fontName="Helvetica-Bold", leading=26)),
         Paragraph(f"Storyboard Export · {sb_name}", S("sub", fontSize=11, textColor=C["mute"])),
-        Paragraph(f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · {len(scenes)} Scenes",
-                  S("dt", fontSize=8, textColor=C["mute"])),
-        HRFlowable(width="100%", thickness=1, color=C["bord"], spaceAfter=8)
+        Paragraph(
+            f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')} · {len(scenes)} Scenes",
+            S("dt", fontSize=8, textColor=C["mute"])
+        ),
+        HRFlowable(width="100%", thickness=1, color=C["bord"], spaceAfter=8),
     ]
+
     for i, sc in enumerate(scenes):
-        snum  = sc.get("scene_number", i+1); title = sc.get("title","Untitled")
-        assets= get_scene_assets(sc);         labels= sc.get("labels",[])
+        snum  = sc.get("scene_number", i+1)
+        title = sc.get("title","Untitled")
+        assets= get_scene_assets(sc)
+        labels= sc.get("labels",[])
         anim  = sc.get("animation","").strip().replace("\\n","\n")
         vd    = sc.get("visual_description","").strip()
-        narr  = sc.get("narration","").strip(); b64 = sc.get("scene_image")
+        narr  = sc.get("narration","").strip()
+        b64   = sc.get("scene_image")
 
         img_cell = []
         if b64:
             try:
                 pil  = PILImage.open(io.BytesIO(base64.b64decode(b64)))
-                b2   = io.BytesIO(); pil.save(b2,"PNG"); b2.seek(0)
+                b2   = io.BytesIO()
+                pil.save(b2,"PNG")
+                b2.seek(0)
                 img_cell.append(RLImage(b2, width=70*mm, height=39.4*mm))
-            except: img_cell.append(Paragraph("[Image error]", S("ie", fontSize=8, textColor=C["mute"])))
+            except Exception:
+                img_cell.append(Paragraph("[Image error]", S("ie", fontSize=8, textColor=C["mute"])))
         else:
             img_cell.append(Paragraph("[ No Image ]", S("ni", fontSize=8, textColor=C["mute"], alignment=TA_CENTER)))
 
@@ -375,47 +395,62 @@ def generate_storyboard_pdf(sb_name, scenes):
         lt  = "  ".join([f"[{l}]" for l in labels]) or "—"
 
         data = [[
-            [Paragraph(f"{snum:02d}", S("sn", fontSize=18, fontName="Helvetica-Bold",
-                        textColor=C["blue"], alignment=TA_CENTER, leading=22))],
+            [Paragraph(
+                f"{snum:02d}",
+                S("sn", fontSize=18, fontName="Helvetica-Bold", textColor=C["blue"], alignment=TA_CENTER, leading=22)
+            )],
             img_cell,
-            [Paragraph(f"SCENE {snum:02d}", S("sl",fontSize=6,fontName="Helvetica-Bold",textColor=C["mute"],spaceAfter=3)),
-             Paragraph(title, S("st",fontSize=12,fontName="Helvetica-Bold",textColor=C["text"],leading=16)),
+            [Paragraph(f"SCENE {snum:02d}", S("sl", fontSize=6, fontName="Helvetica-Bold", textColor=C["mute"], spaceAfter=3)),
+             Paragraph(title, S("st", fontSize=12, fontName="Helvetica-Bold", textColor=C["text"], leading=16)),
              Spacer(1,4),
-             Paragraph("3D ASSETS", S("al",fontSize=6,fontName="Helvetica-Bold",textColor=C["blue"],spaceAfter=2)),
-             Paragraph(at, S("at",fontSize=7,textColor=C["blue"],leading=10)),
+             Paragraph("3D ASSETS", S("al", fontSize=6, fontName="Helvetica-Bold", textColor=C["blue"], spaceAfter=2)),
+             Paragraph(at, S("at", fontSize=7, textColor=C["blue"], leading=10)),
              Spacer(1,3),
-             Paragraph("UI LABELS", S("ll",fontSize=6,fontName="Helvetica-Bold",textColor=C["green"],spaceAfter=2)),
-             Paragraph(lt, S("lt",fontSize=7,textColor=C["green"],leading=10))],
-            [Paragraph("NARRATION", S("nl",fontSize=6,fontName="Helvetica-Bold",textColor=C["pink"],spaceAfter=3)),
-             Paragraph(narr or "—", S("nb",fontSize=8,fontName="Helvetica-Oblique",
-                        textColor=HexColor("#fce7f3"),leading=12))],
-            [Paragraph("ANIMATION LOGIC", S("anl",fontSize=6,fontName="Helvetica-Bold",textColor=C["ambr"],spaceAfter=3)),
-             Paragraph(ah, S("an",fontSize=7.5,textColor=HexColor("#fde68a"),leading=11)),
+             Paragraph("UI LABELS", S("ll", fontSize=6, fontName="Helvetica-Bold", textColor=C["green"], spaceAfter=2)),
+             Paragraph(lt, S("lt", fontSize=7, textColor=C["green"], leading=10))],
+            [Paragraph("NARRATION", S("nl", fontSize=6, fontName="Helvetica-Bold", textColor=C["pink"], spaceAfter=3)),
+             Paragraph(narr or "—", S("nb", fontSize=8, fontName="Helvetica-Oblique", textColor=HexColor("#fce7f3"), leading=12))],
+            [Paragraph("ANIMATION LOGIC", S("anl", fontSize=6, fontName="Helvetica-Bold", textColor=C["ambr"], spaceAfter=3)),
+             Paragraph(ah, S("an", fontSize=7.5, textColor=HexColor("#fde68a"), leading=11)),
              Spacer(1,5),
-             Paragraph("VISUAL DESCRIPTION", S("vdl",fontSize=6,fontName="Helvetica-Bold",textColor=C["purp"],spaceAfter=3)),
-             Paragraph(vd or "—", S("vd",fontSize=7.5,textColor=HexColor("#c4b5fd"),leading=11))]
+             Paragraph("VISUAL DESCRIPTION", S("vdl", fontSize=6, fontName="Helvetica-Bold", textColor=C["purp"], spaceAfter=3)),
+             Paragraph(vd or "—", S("vd", fontSize=7.5, textColor=HexColor("#c4b5fd"), leading=11))]
         ]]
+
         tbl = Table(data, colWidths=[14*mm, 72*mm, 52*mm, 58*mm, 58*mm])
         tbl.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,-1),C["card"]),("BOX",(0,0),(-1,-1),1,C["bord"]),
-            ("INNERGRID",(0,0),(-1,-1),0.5,HexColor("#151528")),("VALIGN",(0,0),(-1,-1),"TOP"),
-            ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
-            ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
-            ("BACKGROUND",(0,0),(0,-1),HexColor("#0a1628")),("LINEAFTER",(0,0),(0,-1),2,C["blue"]),
-            ("LINEBEFORE",(3,0),(3,-1),2,C["pink"]),("LINEBEFORE",(4,0),(4,-1),2,C["ambr"]),
+            ("BACKGROUND",(0,0),(-1,-1),C["card"]),
+            ("BOX",(0,0),(-1,-1),1,C["bord"]),
+            ("INNERGRID",(0,0),(-1,-1),0.5,HexColor("#151528")),
+            ("VALIGN",(0,0),(-1,-1),"TOP"),
+            ("LEFTPADDING",(0,0),(-1,-1),6),
+            ("RIGHTPADDING",(0,0),(-1,-1),6),
+            ("TOPPADDING",(0,0),(-1,-1),6),
+            ("BOTTOMPADDING",(0,0),(-1,-1),6),
+            ("BACKGROUND",(0,0),(0,-1),HexColor("#0a1628")),
+            ("LINEAFTER",(0,0),(0,-1),2,C["blue"]),
+            ("LINEBEFORE",(3,0),(3,-1),2,C["pink"]),
+            ("LINEBEFORE",(4,0),(4,-1),2,C["ambr"]),
         ]))
         story += [KeepTogether([tbl]), Spacer(1,5)]
 
-    story += [HRFlowable(width="100%",thickness=0.5,color=C["bord"],spaceBefore=6),
-              Paragraph(f"LPVision Studio · {sb_name} · {len(scenes)} Scenes · © {datetime.now().year} LearningPad",
-                        S("ft",fontSize=7,textColor=C["mute"],alignment=TA_CENTER))]
+    story += [
+        HRFlowable(width="100%",thickness=0.5,color=C["bord"],spaceBefore=6),
+        Paragraph(
+            f"LPVision Studio · {sb_name} · {len(scenes)} Scenes · © {datetime.now().year} LearningPad",
+            S("ft",fontSize=7,textColor=C["mute"],alignment=TA_CENTER)
+        )
+    ]
 
     def on_page(canvas, doc):
-        canvas.saveState(); canvas.setFillColor(C["bg"])
-        canvas.rect(0,0,landscape(A4)[0],landscape(A4)[1],fill=1,stroke=0); canvas.restoreState()
+        canvas.saveState()
+        canvas.setFillColor(C["bg"])
+        canvas.rect(0,0,landscape(A4)[0],landscape(A4)[1],fill=1,stroke=0)
+        canvas.restoreState()
 
     doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
-    buf.seek(0); return buf.getvalue(), None
+    buf.seek(0)
+    return buf.getvalue(), None
 
 # ─── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -430,8 +465,11 @@ with st.sidebar:
         if st.button("Create Project", key="create_proj_btn"):
             if new_proj_name.strip():
                 pid = str(uuid.uuid4())
-                st.session_state.projects[pid] = {"name": new_proj_name.strip(),
-                    "created": datetime.now().strftime("%b %d, %Y"), "storyboards": {}}
+                st.session_state.projects[pid] = {
+                    "name": new_proj_name.strip(),
+                    "created": datetime.now().strftime("%b %d, %Y"),
+                    "storyboards": {}
+                }
                 st.session_state.active_project    = pid
                 st.session_state.active_storyboard = None
                 st.session_state.goto_editor       = False
@@ -506,7 +544,9 @@ with tabs[0]:
                 name = new_sb_name.strip() or f"Storyboard {len(storyboards)+1}"
                 sbid = str(uuid.uuid4())
                 st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
-                    "name": name, "created": datetime.now().strftime("%b %d, %Y"), "scenes": []
+                    "name": name,
+                    "created": datetime.now().strftime("%b %d, %Y"),
+                    "scenes": []
                 }
                 st.session_state.active_storyboard = sbid
                 st.session_state.editing_scene     = None
@@ -524,10 +564,14 @@ with tabs[0]:
                         sc_imp = normalise_scenes(raw_imp["scenes"])
                         nm_imp = raw_imp.get("name", imp_file.name.replace(".json",""))
                     else:
-                        st.error("Unrecognised JSON format."); sc_imp = []; nm_imp = "Imported"
+                        st.error("Unrecognised JSON format.")
+                        sc_imp = []
+                        nm_imp = "Imported"
                     if sc_imp:
                         st.session_state.projects[st.session_state.active_project]["storyboards"][sbid] = {
-                            "name": nm_imp, "created": datetime.now().strftime("%b %d, %Y"), "scenes": sc_imp
+                            "name": nm_imp,
+                            "created": datetime.now().strftime("%b %d, %Y"),
+                            "scenes": sc_imp
                         }
                         st.session_state.active_storyboard = sbid
                         st.session_state.goto_editor = True
@@ -540,7 +584,8 @@ with tabs[0]:
         st.markdown('<div style="text-align:center;padding:3rem;color:#334155;">No storyboards yet.</div>', unsafe_allow_html=True)
     else:
         for sbid, sb in storyboards.items():
-            n_sc = len(sb.get("scenes", [])); is_open = sbid == active_sb_id
+            n_sc = len(sb.get("scenes", []))
+            is_open = sbid == active_sb_id
             ci, co, cd = st.columns([6, 1.5, 1])
             with ci:
                 c = '#93c5fd' if is_open else '#e2e8f0'
@@ -586,15 +631,20 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     pdf_up = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_uploader")
                     if pdf_up:
                         reader = PyPDF2.PdfReader(pdf_up)
-                        for pg in reader.pages: final_text += (pg.extract_text() or "")
+                        for pg in reader.pages:
+                            final_text += (pg.extract_text() or "")
                         st.success(f"PDF extracted · {len(final_text)} chars")
             gc, cc = st.columns(2)
             with gc:
                 gen_btn = st.button(f"🚀 Generate {num_scenes} Scenes", key="gen_btn", use_container_width=True)
             with cc:
                 clr_btn = st.button("✕ Clear All Scenes", key="clear_btn", use_container_width=True)
+
             if clr_btn:
-                save_scenes([]); st.session_state.editing_scene = None; st.rerun()
+                save_scenes([])
+                st.session_state.editing_scene = None
+                st.rerun()
+
             if gen_btn:
                 if not final_text.strip():
                     st.warning("Paste content or upload a PDF first.")
@@ -602,9 +652,11 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     with st.spinner(f"Generating {num_scenes} scenes with Groq…"):
                         new_sc = generate_scenes_groq(final_text, num_scenes)
                     if new_sc:
-                        save_scenes(new_sc); st.session_state.editing_scene = None
+                        save_scenes(new_sc)
+                        st.session_state.editing_scene = None
                         st.session_state.goto_editor = True
-                        st.success(f"✓ {len(new_sc)} scenes generated!"); st.rerun()
+                        st.success(f"✓ {len(new_sc)} scenes generated!")
+                        st.rerun()
 
         scenes = active_sb.get("scenes", [])
 
@@ -734,7 +786,8 @@ with tabs[default_tab if default_tab == 1 else 1]:
                     c_img, c_a, c_b, c_n = st.columns([1, 1, 1, 2])
                     with c_img:
                         if img_b64:
-                            st.markdown(clickable_img(img_b64, title, snum), unsafe_allow_html=True)
+                            # ✅ UPDATED call: pass sc so lightbox can show labels + voice-over
+                            st.markdown(clickable_img(img_b64, title, snum, sc), unsafe_allow_html=True)
                         else:
                             st.markdown("""<div style="height:145px;background:#0d0d1a;border:1px dashed #2d2d5a;
                                 border-radius:8px;display:flex;align-items:center;justify-content:center;
@@ -785,7 +838,8 @@ with tabs[default_tab if default_tab == 1 else 1]:
                 _, dc = st.columns([8, 1])
                 with dc:
                     if st.button("🗑 Delete", key=f"del_scene_{i}", use_container_width=True):
-                        scenes.pop(i); save_scenes(scenes)
+                        scenes.pop(i)
+                        save_scenes(scenes)
                         if st.session_state.editing_scene == i:
                             st.session_state.editing_scene = None
                         st.rerun()
@@ -801,45 +855,65 @@ with tabs[2]:
     else:
         scenes = active_sb.get("scenes", [])
         c_exp, c_imp = st.columns(2)
+
         with c_exp:
             st.markdown('<div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#475569;text-transform:uppercase;margin-bottom:0.75rem;">Export</div>', unsafe_allow_html=True)
+
             if scenes:
                 export_scenes = []
                 for sc in scenes:
                     e = dict(sc)
                     if "assets" not in e:
                         e["assets"] = e.pop("required_assets", e.pop("models_3d", []))
-                    e.pop("required_assets", None); e.pop("models_3d", None)
+                    e.pop("required_assets", None)
+                    e.pop("models_3d", None)
                     e.setdefault("labels", [])
                     export_scenes.append(e)
 
                 inc_imgs = st.checkbox("Include generated images in JSON export", value=False)
                 export_no_img = [dict(e) for e in export_scenes]
                 if not inc_imgs:
-                    for e in export_no_img: e.pop("scene_image", None)
+                    for e in export_no_img:
+                        e.pop("scene_image", None)
+
                 payload_out = {"name": active_sb["name"], "created": active_sb.get("created",""), "scenes": export_no_img}
-                st.download_button("📥 Download Storyboard JSON",
+
+                st.download_button(
+                    "📥 Download Storyboard JSON",
                     data=json.dumps(payload_out, indent=2),
                     file_name=f"{active_sb['name'].replace(' ','_')}_storyboard.json",
-                    mime="application/json", use_container_width=True)
+                    mime="application/json",
+                    use_container_width=True
+                )
 
                 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-                st.markdown('<div style="font-size:10px;color:#475569;margin-bottom:6px;">PDF includes all scene data + images. Requires <code>reportlab</code> and <code>Pillow</code>.</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div style="font-size:10px;color:#475569;margin-bottom:6px;">PDF includes all scene data + images. '
+                    'Requires <code>reportlab</code> and <code>Pillow</code>.</div>',
+                    unsafe_allow_html=True
+                )
+
                 if st.button("📄 Generate PDF Storyboard", key="gen_pdf_btn", use_container_width=True):
                     with st.spinner("Building PDF…"):
                         pdf_bytes, pdf_err = generate_storyboard_pdf(active_sb["name"], scenes)
                     if pdf_bytes:
                         st.session_state["_pdf_bytes"] = pdf_bytes
                         st.session_state["_pdf_name"]  = active_sb["name"]
-                        st.success(f"✓ PDF ready — {len(pdf_bytes)//1024} KB"); st.rerun()
+                        st.success(f"✓ PDF ready — {len(pdf_bytes)//1024} KB")
+                        st.rerun()
                     else:
                         st.error(f"PDF failed: {pdf_err}")
+                        if "reportlab or Pillow not installed" in str(pdf_err):
+                            st.info("Install dependencies then restart:\n\n`pip install reportlab Pillow`")
 
                 if "_pdf_bytes" in st.session_state and st.session_state.get("_pdf_name") == active_sb["name"]:
-                    st.download_button("⬇️ Download PDF",
+                    st.download_button(
+                        "⬇️ Download PDF",
                         data=st.session_state["_pdf_bytes"],
                         file_name=f"{active_sb['name'].replace(' ','_')}_storyboard.pdf",
-                        mime="application/pdf", use_container_width=True)
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
                 st.markdown("---")
                 st.markdown("**Scene Table Preview**")
@@ -857,7 +931,10 @@ with tabs[2]:
                 st.info("No scenes to export yet.")
 
         with c_imp:
-            st.markdown('<div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#475569;text-transform:uppercase;margin-bottom:0.75rem;">Import into Active Storyboard</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#475569;text-transform:uppercase;margin-bottom:0.75rem;">Import into Active Storyboard</div>',
+                unsafe_allow_html=True
+            )
             st.caption("Upload a JSON exported from LPVision Studio or a raw scenes array.")
             imp_f = st.file_uploader("Choose JSON", type=["json"], key="export_tab_import")
             if imp_f:
@@ -868,10 +945,13 @@ with tabs[2]:
                     elif isinstance(raw_d, dict) and "scenes" in raw_d:
                         imp_sc = normalise_scenes(raw_d["scenes"])
                     else:
-                        st.error("Unrecognised format."); imp_sc = []
+                        st.error("Unrecognised format.")
+                        imp_sc = []
                     if imp_sc:
                         if st.button("⬆ Apply Imported Scenes", key="apply_import"):
-                            save_scenes(imp_sc); st.session_state.editing_scene = None
-                            st.session_state.goto_editor = True; st.rerun()
+                            save_scenes(imp_sc)
+                            st.session_state.editing_scene = None
+                            st.session_state.goto_editor = True
+                            st.rerun()
                 except Exception as e:
                     st.error(f"Parse error: {e}")
