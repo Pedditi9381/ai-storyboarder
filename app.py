@@ -479,8 +479,17 @@ active_sb    = get_active_storyboard()
 active_sb_id = st.session_state.active_storyboard
 
 st.markdown(f"""
+st.markdown("""
 <div style="display:flex;align-items:center;justify-content:space-between;
             padding:0.6rem 0;border-bottom:1px solid #1e1e3a;margin-bottom:1rem;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:14px;font-weight:600;color:#94a3b8;">Project:</span>
+    <span style="font-size:14px;font-weight:700;color:#f1f5f9;">
+      Studio Workspace
+    </span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
   <div style="display:flex;align-items:center;gap:10px;">
     <span style="font-size:14px;font-weight:600;color:#94a3b8;">{proj_name}</span>
     <span style="color:#334155;">›</span>
