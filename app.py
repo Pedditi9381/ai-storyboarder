@@ -80,7 +80,7 @@ except Exception:
     GEMINI_API_KEY = None
 
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict"
+GEMINI_IMAGE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def get_active_project():
@@ -206,40 +206,59 @@ def generate_scene_image(sc):
     if not GEMINI_API_KEY:
         st.error("Add GEMINI_API_KEY to Streamlit Secrets.")
         return None
+
     vd     = sc.get("visual_description", "")
     title  = sc.get("title", "")
     assets = ", ".join(get_scene_assets(sc))
     labels = ", ".join(sc.get("labels", []))
     narr   = sc.get("narration", "")[:200]
+
     prompt = (
-        f"3D educational animation storyboard frame. Scene: '{title}'. "
-        f"Visual: {vd} "
-        f"3D models present: {assets}. On-screen labels: {labels}. Context: {narr}. "
-        "Style: dark studio background, clean instructional 3D render, "
-        "vivid neon accent lighting, high detail, no text overlays."
+        f"Generate a 3D educational animation storyboard frame for scene titled '{title}'. "
+        f"Visual layout: {vd} "
+        f"3D models in scene: {assets}. "
+        f"On-screen UI labels visible: {labels}. "
+        f"Educational context: {narr}. "
+        "Art style: dark deep-space studio background (#06060f), clean instructional 3D render, "
+        "vivid neon accent lighting (blue and purple glows), high detail geometry, "
+        "cinematic depth of field, no text overlays, widescreen 16:9 composition."
     )
+
     headers = {"Content-Type": "application/json"}
-    # Imagen 3 uses the :predict endpoint with instances/parameters format
     payload = {
-        "instances": [{"prompt": prompt}],
-        "parameters": {
-            "sampleCount": 1,
-            "aspectRatio": "16:9",
-            "safetyFilterLevel": "block_few",
-            "personGeneration": "allow_adult"
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "responseModalities": ["IMAGE", "TEXT"],
+            "responseMimeType": "image/png"
         }
     }
+
     try:
-        resp = requests.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", headers=headers, json=payload, timeout=90)
+        url  = f"{GEMINI_IMAGE_URL}?key={GEMINI_API_KEY}"
+        resp = requests.post(url, headers=headers, json=payload, timeout=90)
+
         if resp.status_code == 200:
             data = resp.json()
-            predictions = data.get("predictions", [])
-            if predictions and "bytesBase64Encoded" in predictions[0]:
-                return predictions[0]["bytesBase64Encoded"]
-            st.warning("Imagen returned no image in response.")
+            # Extract base64 image from response parts
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            for part in parts:
+                inline = part.get("inlineData", {})
+                if inline.get("mimeType", "").startswith("image/"):
+                    return inline["data"]   # base64 string
+            st.warning("Gemini returned no image part. The model may not support image output on your API tier.")
             return None
-        st.error(f"Gemini error {resp.status_code}: {resp.text[:400]}")
+
+        # Parse error nicely
+        try:
+            err = resp.json().get("error", {})
+            msg = err.get("message", resp.text[:300])
+        except Exception:
+            msg = resp.text[:300]
+        st.error(f"Gemini image error {resp.status_code}: {msg}")
         return None
+
     except Exception as e:
         st.error(f"Image generation failed: {e}")
         return None
