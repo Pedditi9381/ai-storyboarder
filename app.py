@@ -65,19 +65,20 @@ hr { border-color:#1e1e3a !important; }
 </div>
 <script>
 function openLB(src, cap) {
-  const lb = document.getElementById('lpv-lightbox');
-  const img = document.getElementById('lpv-lb-img');
-  const caption = document.getElementById('lpv-lb-cap');
-  img.src = src;
-  caption.textContent = cap;
-  lb.style.display = 'flex'; 
-  document.body.style.overflow = 'hidden'; 
+  document.getElementById('lpv-lb-img').src = src;
+  document.getElementById('lpv-lb-cap').textContent = cap || '';
+  document.getElementById('lpv-lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 function closeLB() {
-  document.getElementById('lpv-lightbox').style.display = 'none';
-  document.body.style.overflow = 'auto';
+  document.getElementById('lpv-lightbox').classList.remove('open');
+  document.getElementById('lpv-lb-img').src = '';
+  document.body.style.overflow = '';
 }
+document.getElementById('lpv-lightbox').addEventListener('click', function(e){ if(e.target===this) closeLB(); });
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLB(); });
 </script>
+""", unsafe_allow_html=True)
 
 # ─── SESSION STATE ─────────────────────────────────────────────────────────────
 def init_state():
@@ -148,15 +149,10 @@ def section_box(title, color, html, bg, border, left_accent=None):
 
 def clickable_img(b64, scene_title, snum):
     uri = f"data:image/png;base64,{b64}"
-    safe_title = scene_title.replace("'", "\\'").replace('"', '\\"')
-    cap = f"Scene {snum:02d} · {safe_title}"
-    return (
-        f'<div class="scene-img-wrap" onclick="openLB(\'{uri}\', \'{cap}\')">'
-        f'<img src="{uri}" alt="{cap}" style="width:100%; border-radius:8px; cursor:zoom-in;"/>'
-        f'<div class="zoom-hint" style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.7); '
-        f'color:white; font-size:10px; padding:2px 6px; border-radius:4px; pointer-events:none;">🔍 Click to expand</div>'
-        f'</div>'
-    )
+    cap = f"Scene {snum:02d}  ·  {scene_title}".replace("'", "&#39;")
+    return (f'<div class="scene-img-wrap" onclick="openLB(\'{uri}\',\'{cap}\')">'
+            f'<img src="{uri}" alt="{cap}"/>'
+            f'<span class="zoom-hint">🔍 Click to expand</span></div>')
 
 # ─── GROQ helpers ──────────────────────────────────────────────────────────────
 def fix_control_chars(s):
@@ -468,7 +464,7 @@ with st.sidebar:
       Groq <span style="color:{'#4ade80' if groq_ok else '#f87171'};">{'✓ Connected' if groq_ok else '✗ Add GROQ_API_KEY'}</span><br>
       Gemini <span style="color:{'#4ade80' if gem_ok else '#f59e0b'};">{'✓ Connected' if gem_ok else '⚠ Pollinations fallback'}</span>
     </div>
-    <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">&copy; 2026 LearningPad</div>
+    <div style="font-size:10px;color:#334155;text-align:center;margin-top:10px;">© 2026 LearningPad</div>
     """, unsafe_allow_html=True)
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
@@ -479,20 +475,11 @@ active_sb    = get_active_storyboard()
 active_sb_id = st.session_state.active_storyboard
 
 st.markdown(f"""
-st.markdown("""
 <div style="display:flex;align-items:center;justify-content:space-between;
             padding:0.6rem 0;border-bottom:1px solid #1e1e3a;margin-bottom:1rem;">
   <div style="display:flex;align-items:center;gap:10px;">
-    <span style="font-size:14px;font-weight:600;color:#94a3b8;">Project:</span>
-    <span style="font-size:14px;font-weight:700;color:#f1f5f9;">
-      Studio Workspace
-    </span>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-  <div style="display:flex;align-items:center;gap:10px;">
     <span style="font-size:14px;font-weight:600;color:#94a3b8;">{proj_name}</span>
-    <span style="color:#334155;">&gt;</span>
+    <span style="color:#334155;">›</span>
     <span style="font-size:14px;font-weight:700;color:#f1f5f9;">
       {active_sb['name'] if active_sb else 'Select a Storyboard'}
     </span>
@@ -559,7 +546,7 @@ with tabs[0]:
                 c = '#93c5fd' if is_open else '#e2e8f0'
                 st.markdown(f"""<div style="padding:0.5rem 0;">
                   <div style="font-size:14px;font-weight:600;color:{c};">{'▸ ' if is_open else ''}{sb['name']}</div>
-                 <div style="font-size:12px;color:#475569;">{sb.get('created','')} | {n_sc} scene{'s' if n_sc!=1 else ''}</div>
+                  <div style="font-size:12px;color:#475569;">{sb.get('created','')} · {n_sc} scene{'s' if n_sc!=1 else ''}</div>
                 </div>""", unsafe_allow_html=True)
             with co:
                 if st.button("Open →", key=f"open_{sbid}", use_container_width=True):
@@ -622,14 +609,12 @@ with tabs[default_tab if default_tab == 1 else 1]:
         scenes = active_sb.get("scenes", [])
 
         if not scenes:
-            st.markdown("""
-                <div style="text-align:center;padding:5rem 2rem;color:#334155;
-                            border:1px dashed #1e1e3a;border-radius:16px;margin-top:1rem;">
-                  <div style="font-size:3rem;">🎞️</div>
-                  <div style="font-size:15px;font-weight:600;color:#475569;margin-top:0.5rem;">No scenes yet</div>
-                  <div style="font-size:13px;margin-top:0.3rem;">Expand the controls above and hit Generate.</div>
-                </div>
-                """, unsafe_allow_html=True)
+            st.markdown("""<div style="text-align:center;padding:5rem 2rem;color:#334155;
+                border:1px dashed #1e1e3a;border-radius:16px;margin-top:1rem;">
+              <div style="font-size:3rem;">🎞</div>
+              <div style="font-size:15px;font-weight:600;color:#475569;margin-top:0.5rem;">No scenes yet</div>
+              <div style="font-size:13px;margin-top:0.3rem;">Expand the controls above and hit Generate.</div>
+            </div>""", unsafe_allow_html=True)
         else:
             n_images  = sum(1 for s in scenes if s.get("scene_image"))
             n_missing = len(scenes) - n_images
