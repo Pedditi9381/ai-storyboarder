@@ -65,20 +65,19 @@ hr { border-color:#1e1e3a !important; }
 </div>
 <script>
 function openLB(src, cap) {
-  document.getElementById('lpv-lb-img').src = src;
-  document.getElementById('lpv-lb-cap').textContent = cap || '';
-  document.getElementById('lpv-lightbox').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  const lb = document.getElementById('lpv-lightbox');
+  const img = document.getElementById('lpv-lb-img');
+  const caption = document.getElementById('lpv-lb-cap');
+  img.src = src;
+  caption.textContent = cap;
+  lb.style.display = 'flex'; 
+  document.body.style.overflow = 'hidden'; 
 }
 function closeLB() {
-  document.getElementById('lpv-lightbox').classList.remove('open');
-  document.getElementById('lpv-lb-img').src = '';
-  document.body.style.overflow = '';
+  document.getElementById('lpv-lightbox').style.display = 'none';
+  document.body.style.overflow = 'auto';
 }
-document.getElementById('lpv-lightbox').addEventListener('click', function(e){ if(e.target===this) closeLB(); });
-document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLB(); });
 </script>
-""", unsafe_allow_html=True)
 
 # ─── SESSION STATE ─────────────────────────────────────────────────────────────
 def init_state():
@@ -149,10 +148,15 @@ def section_box(title, color, html, bg, border, left_accent=None):
 
 def clickable_img(b64, scene_title, snum):
     uri = f"data:image/png;base64,{b64}"
-    cap = f"Scene {snum:02d}  ·  {scene_title}".replace("'", "&#39;")
-    return (f'<div class="scene-img-wrap" onclick="openLB(\'{uri}\',\'{cap}\')">'
-            f'<img src="{uri}" alt="{cap}"/>'
-            f'<span class="zoom-hint">🔍 Click to expand</span></div>')
+    safe_title = scene_title.replace("'", "\\'").replace('"', '\\"')
+    cap = f"Scene {snum:02d} · {safe_title}"
+    return (
+        f'<div class="scene-img-wrap" onclick="openLB(\'{uri}\', \'{cap}\')">'
+        f'<img src="{uri}" alt="{cap}" style="width:100%; border-radius:8px; cursor:zoom-in;"/>'
+        f'<div class="zoom-hint" style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.7); '
+        f'color:white; font-size:10px; padding:2px 6px; border-radius:4px; pointer-events:none;">🔍 Click to expand</div>'
+        f'</div>'
+    )
 
 # ─── GROQ helpers ──────────────────────────────────────────────────────────────
 def fix_control_chars(s):
