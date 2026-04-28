@@ -354,49 +354,112 @@ def make_pdf(name, scenes):
     doc.build(story,onFirstPage=bg,onLaterPages=bg); buf.seek(0); return buf.getvalue(),None
 
 # ─────────────────────────────────────────────────
-# LIGHTBOX (pure Streamlit — no JS injection)
-# Rendered as a full-width HTML block when lb_scene is set
+# LIGHTBOX — buttons rendered at z-index:99999
+# so they sit above the dark overlay
 # ─────────────────────────────────────────────────
 def show_lightbox():
     sc = st.session_state.lb_scene
     if not sc: return
     b64 = sc.get("scene_image")
     if not b64: return
-    snum = sc.get("scene_number","?"); title = sc.get("title","")
-    uri = f"data:image/png;base64,{b64}"
-    cap = f"Scene {snum:02d} · {title}"
+    snum  = sc.get("scene_number","?")
+    title = sc.get("title","")
+    uri   = f"data:image/png;base64,{b64}"
+    cap   = f"Scene {snum:02d} · {title}"
 
+    # ── dark backdrop + image (purely visual, no interaction needed) ──
     st.markdown(f"""
-    <div style="position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;
-         background:rgba(3,3,18,.97);backdrop-filter:blur(22px);
-         display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
-      <img src="{uri}" style="max-width:90vw;max-height:76vh;border-radius:14px;
-           box-shadow:0 0 80px rgba(91,143,249,.4),0 0 0 1px rgba(91,143,249,.3);object-fit:contain;"/>
-      <div style="font-size:11px;color:#3d4068;font-family:'DM Mono',monospace;letter-spacing:.07em;">{cap}</div>
+    <div style="position:fixed;z-index:9000;top:0;left:0;width:100vw;height:100vh;
+         background:rgba(3,3,20,0.97);backdrop-filter:blur(24px);">
+    </div>
+    <div style="position:fixed;z-index:9100;top:50%;left:50%;
+         transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+      <img src="{uri}"
+           style="max-width:88vw;max-height:72vh;border-radius:14px;
+                  box-shadow:0 0 90px rgba(91,143,249,.45),0 0 0 1px rgba(91,143,249,.35);
+                  object-fit:contain;display:block;"/>
+      <div style="margin-top:10px;font-size:11px;color:#3d4068;
+                  font-family:'DM Mono',monospace;letter-spacing:.07em;">{cap}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1,1,1])
-    with col1:
-        img_bytes = base64.b64decode(b64)
-        st.download_button("⬇ Download Image", data=img_bytes,
+    # ── action buttons at very high z-index via inline style injection ──
+    # We inject a wrapper that lifts the entire Streamlit button container
+    st.markdown("""
+    <style>
+    /* Lift the lightbox button row above the overlay */
+    [data-testid="stHorizontalBlock"]:has(button[kind="secondary"][data-testid*="lb_"]),
+    div[data-testid="column"]:has(button[data-testid*="lb_"]) {
+        position: relative;
+        z-index: 99999 !important;
+    }
+    /* Close button — prominent red-tinted */
+    button[kind="secondary"][data-testid*="lb_close"] {
+        background: rgba(248,113,113,0.15) !important;
+        color: #f87171 !important;
+        border-color: rgba(248,113,113,0.4) !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+    }
+    button[kind="secondary"][data-testid*="lb_close"]:hover {
+        background: rgba(248,113,113,0.3) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Fixed-position button container using columns
+    # Streamlit renders these in document flow but we push them to top with CSS
+    st.markdown("""
+    <style>
+    /* Push the lightbox controls to fixed position at bottom-center */
+    div[data-testid="stHorizontalBlock"]:has([data-testid="lb_close"]) {
+        position: fixed !important;
+        bottom: 40px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 99999 !important;
+        width: auto !important;
+        display: flex !important;
+        gap: 12px !important;
+        background: rgba(9,9,26,0.85) !important;
+        padding: 10px 20px !important;
+        border-radius: 40px !important;
+        border: 1px solid rgba(91,143,249,0.2) !important;
+        backdrop-filter: blur(12px) !important;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.6) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    img_bytes = base64.b64decode(b64)
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        st.download_button(
+            "⬇ Download",
+            data=img_bytes,
             file_name=f"scene_{snum:02d}_{title.replace(' ','_').lower()}.png",
-            mime="image/png", key="lb_dl", use_container_width=True)
-    with col2:
+            mime="image/png",
+            key="lb_dl",
+            use_container_width=True,
+        )
+    with c2:
         if st.button("🔄 Regenerate", key="lb_regen", use_container_width=True):
-            sb = active_sb()
-            if sb:
-                scenes = sb.get("scenes",[])
+            cur_sb = active_sb()
+            if cur_sb:
+                scenes = cur_sb.get("scenes", [])
                 idx = next((j for j,s in enumerate(scenes) if s.get("scene_number")==sc.get("scene_number")), None)
                 if idx is not None:
                     with st.spinner("Regenerating…"):
                         b = gen_image(scenes[idx])
-                    if b: scenes[idx]["scene_image"]=b; save_scenes(scenes)
-                    st.session_state.lb_scene = scenes[idx]
+                    if b:
+                        scenes[idx]["scene_image"] = b
+                        save_scenes(scenes)
+                        st.session_state.lb_scene = scenes[idx]
             st.rerun()
-    with col3:
-        if st.button("✕ Close", key="lb_close", use_container_width=True):
-            st.session_state.lb_scene = None; st.rerun()
+    with c3:
+        if st.button("✕  Close", key="lb_close", use_container_width=True):
+            st.session_state.lb_scene = None
+            st.rerun()
 
 # ─────────────────────────────────────────────────
 # SIDEBAR
