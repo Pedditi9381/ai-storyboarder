@@ -4,7 +4,6 @@ from datetime import datetime
 
 st.set_page_config(page_title="LPVision Studio", layout="wide", page_icon="🎬")
 
-# ── The ONLY st.markdown call for CSS – NO <script> tags here ──────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
@@ -23,7 +22,6 @@ section[data-testid="stSidebar"]{background:var(--card)!important;border-right:1
 section[data-testid="stSidebar"] .block-container{padding:.75rem!important;}
 #MainMenu,footer,header{visibility:hidden;}
 
-/* buttons */
 .stButton>button{
   background:var(--raised)!important;color:var(--t1)!important;
   border:1px solid var(--b1)!important;border-radius:8px!important;
@@ -34,7 +32,6 @@ section[data-testid="stSidebar"] .block-container{padding:.75rem!important;}
 .stButton>button:hover{background:var(--b1)!important;color:var(--t0)!important;border-color:var(--b2)!important;}
 .stDownloadButton>button{background:rgba(52,211,153,.08)!important;color:var(--green)!important;border:1px solid rgba(52,211,153,.2)!important;border-radius:8px!important;}
 
-/* inputs */
 .stTextArea textarea,.stTextInput input{
   background:var(--input)!important;color:var(--t0)!important;
   border:1px solid var(--b1)!important;border-radius:8px!important;
@@ -44,32 +41,23 @@ section[data-testid="stSidebar"] .block-container{padding:.75rem!important;}
 label{color:var(--t2)!important;font-size:10px!important;font-weight:600!important;letter-spacing:.07em!important;text-transform:uppercase!important;}
 .stCheckbox label{color:var(--t1)!important;font-size:13px!important;text-transform:none!important;letter-spacing:0!important;}
 
-/* tabs */
 .stTabs [data-baseweb="tab-list"]{background:transparent!important;border-bottom:1px solid var(--b0)!important;gap:0;}
 .stTabs [data-baseweb="tab"]{background:transparent!important;color:var(--t2)!important;font-family:'Inter',sans-serif!important;font-size:12px!important;font-weight:700!important;letter-spacing:.05em!important;border-bottom:2px solid transparent!important;padding:.55rem 1rem!important;transition:all .18s!important;}
 .stTabs [aria-selected="true"]{color:var(--t0)!important;border-bottom-color:var(--blue)!important;}
 .stTabs [data-baseweb="tab-panel"]{padding:.85rem 0 0 0!important;}
 
-/* expander */
 .streamlit-expanderHeader{background:var(--raised)!important;color:var(--t1)!important;border:1px solid var(--b0)!important;border-radius:8px!important;font-size:13px!important;}
-
-/* file upload */
 [data-testid="stFileUploadDropzone"]{background:var(--input)!important;border:1px dashed var(--b1)!important;border-radius:8px!important;}
-
-/* alerts */
 .stAlert{background:var(--raised)!important;border:1px solid var(--b0)!important;border-radius:8px!important;}
 hr{border-color:var(--b0)!important;}
 .stRadio label{color:var(--t1)!important;font-size:13px!important;text-transform:none!important;letter-spacing:0!important;}
 .stSlider label{text-transform:none!important;font-size:13px!important;color:var(--t1)!important;}
 
-/* ── custom components ── */
 .brand-wrap{display:flex;align-items:center;gap:10px;padding:.4rem 0 1.1rem;border-bottom:1px solid var(--b0);margin-bottom:.9rem;}
 .brand-logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--purp));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:#fff;box-shadow:0 0 14px rgba(91,143,249,.35);}
 .brand-sub{font-size:9px;font-weight:600;color:var(--t2);letter-spacing:.22em;font-family:'DM Mono',monospace;}
 .brand-name{font-size:14px;font-weight:800;color:var(--t0);font-family:'Syne',sans-serif;}
 
-.scene-card{background:var(--card);border:1px solid var(--b0);border-radius:12px;padding:.85rem 1rem;margin-bottom:1rem;}
-.scene-card:hover{border-color:var(--b1);}
 .scene-num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1e3a8a,#5b21b6);color:#fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;}
 .scene-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--t0);}
 
@@ -78,12 +66,6 @@ hr{border-color:var(--b0)!important;}
 .pill{display:inline-block;padding:2px 9px;border-radius:16px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace;margin:2px 2px 2px 0;}
 
 .img-placeholder{height:140px;background:var(--raised);border:1.5px dashed var(--b1);border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:default;}
-
-/* clickable image */
-.img-thumb{position:relative;border-radius:9px;overflow:hidden;cursor:pointer;display:block;}
-.img-thumb img{width:100%;border-radius:9px;border:1px solid var(--b1);display:block;transition:transform .2s,box-shadow .2s;}
-.img-thumb:hover img{transform:scale(1.03);box-shadow:0 0 0 2px var(--blue),0 8px 28px rgba(91,143,249,.25);}
-.img-thumb .overlay{position:absolute;bottom:6px;right:7px;background:rgba(0,0,0,.6);color:rgba(255,255,255,.75);font-size:9px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:12px;backdrop-filter:blur(4px);}
 
 .narr-text{font-size:12.5px;color:#e8e0ff;line-height:1.8;font-style:italic;}
 .anim-row{display:flex;gap:8px;margin-bottom:5px;align-items:flex-start;}
@@ -98,16 +80,6 @@ hr{border-color:var(--b0)!important;}
 .topbar-sep{color:var(--t2);}
 .topbar-sb{font-size:15px;font-weight:800;color:var(--t0);font-family:'Syne',sans-serif;}
 
-/* fullscreen overlay (pure CSS, toggled by st.session_state) */
-.lb-overlay{position:fixed;z-index:99999;top:0;left:0;width:100vw;height:100vh;background:rgba(2,2,16,.97);backdrop-filter:blur(20px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
-.lb-img{max-width:90vw;max-height:78vh;border-radius:14px;box-shadow:0 0 80px rgba(91,143,249,.35),0 0 0 1px rgba(91,143,249,.3);object-fit:contain;}
-.lb-cap{font-size:11px;color:var(--t2);font-family:'DM Mono',monospace;letter-spacing:.07em;}
-.lb-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
-.lb-btn{padding:8px 18px;border-radius:20px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
-.lb-close{background:rgba(255,255,255,.06);color:var(--t1);border:1px solid rgba(255,255,255,.1)!important;}
-.lb-close:hover{background:rgba(255,255,255,.12);}
-
-/* status bar */
 .gen-bar{background:var(--raised);border:1px solid var(--b1);border-radius:8px;padding:.5rem .85rem;font-size:12px;color:var(--t1);font-family:'DM Mono',monospace;}
 
 .sb-row{display:flex;align-items:center;padding:.5rem 0;gap:0;}
@@ -115,6 +87,10 @@ hr{border-color:var(--b0)!important;}
 .sb-name{font-size:13px;font-weight:700;color:var(--t0);font-family:'Syne',sans-serif;}
 .sb-meta{font-size:10px;color:var(--t2);font-family:'DM Mono',monospace;margin-top:2px;}
 .sb-active .sb-name{color:var(--blue);}
+
+.auto-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700;
+  font-family:'DM Mono',monospace;background:rgba(47,212,192,.12);color:var(--teal);
+  border:1px solid rgba(47,212,192,.25);margin-left:6px;vertical-align:middle;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -133,7 +109,6 @@ def init():
         st.session_state.active_project = list(st.session_state.projects.keys())[0]
 
 def _date(): return datetime.now().strftime("%b %d, %Y")
-
 init()
 
 # ─────────────────────────────────────────────────
@@ -190,14 +165,49 @@ def fix_cc(s):
 def strip_fence(r):
     r=r.strip(); r=re.sub(r'^```[a-zA-Z]*\n?','',r); return re.sub(r'```$','',r.strip()).strip()
 
+def image_to_text_via_gemini(b64_img, mime_type="image/jpeg"):
+    """Use Gemini vision to extract educational content from an image."""
+    if not GEM_KEY: return None
+    payload = {
+        "contents": [{"parts": [
+            {"inline_data": {"mime_type": mime_type, "data": b64_img}},
+            {"text": (
+                "Carefully describe all educational content in this image: "
+                "all text, labels, diagrams, charts, key terms, dates, years, "
+                "proper names, facts, processes, and concepts visible. "
+                "Be thorough — this description will be used to generate a storyboard."
+            )}
+        ]}]
+    }
+    try:
+        r = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEM_KEY}",
+            headers={"Content-Type":"application/json"}, json=payload, timeout=60
+        )
+        if r.status_code == 200:
+            parts = r.json().get("candidates",[{}])[0].get("content",{}).get("parts",[])
+            return " ".join(p.get("text","") for p in parts if "text" in p)
+    except: pass
+    return None
+
 # ─────────────────────────────────────────────────
 # GROQ GENERATION
 # ─────────────────────────────────────────────────
-def gen_scenes(text, n):
+def gen_scenes(text, n, auto_count=False):
     if not GROQ_KEY: st.error("Add GROQ_API_KEY to Secrets."); return None
+
+    if auto_count:
+        count_instruction = (
+            "Decide the optimal number of scenes yourself based on how much content there is. "
+            "Use between 4 and 15 scenes — enough to cover every distinct concept without padding. "
+            "Return EXACTLY that many scenes in the array."
+        )
+    else:
+        count_instruction = f"Convert the source material into EXACTLY {n} storyboard scenes."
+
     sys_prompt = (
-        f"You are a Senior 3D Instructional Animator and Educational Script Writer.\n"
-        f"Convert the source material into EXACTLY {n} storyboard scenes.\n"
+        "You are a Senior 3D Instructional Animator and Educational Script Writer.\n"
+        f"{count_instruction}\n"
         "Return ONLY a valid JSON array — no markdown, no preamble, no explanation.\n\n"
         "Each JSON object must have EXACTLY these keys:\n\n"
         "  scene_number  : integer (1 to N)\n"
@@ -205,26 +215,29 @@ def gen_scenes(text, n):
         "  assets        : array of 3-5 snake_case .glb filenames for objects physically shown in THIS scene only\n"
         "  labels        : array of 2-4 short annotation strings — only terms visible on screen in this scene\n"
         "  animation     : string — numbered steps using \\n between steps describing 3D movements\n"
-        "  visual_description : string — HOW TO BUILD THIS SCENE IN BLENDER as low-poly GLB. Include:\n"
-        "    * Each asset as simple geometry: e.g. boiler=8-sided cylinder, piston=bevelled cube\n"
-        "    * Poly budget: 300-1500 triangles per object, no subdivisions, no sculpting\n"
-        "    * Materials: flat colour or simple PBR (1-2 colours per object), no image textures\n"
-        "    * Camera: angle + focal length (e.g. 50mm front view)\n"
-        "    * 3-point lighting: key light direction + colour, fill side, teal rim behind\n"
-        "    * Export note: apply all modifiers, triangulate mesh, export GLB Y-up\n"
+        "  visual_description : string — Describe WHAT to create for this scene in plain creative language:\n"
+        "    * What objects/elements should appear and what they look like (shape, colour, style, size)\n"
+        "    * How they are arranged in the scene (foreground, background, left-right relationships)\n"
+        "    * The mood, lighting atmosphere (e.g. warm daylight, cool lab glow, dramatic spotlight)\n"
+        "    * Camera viewpoint (e.g. close-up front view, wide establishing shot, top-down, side profile)\n"
+        "    * Any movement or key moment to capture (e.g. liquid flowing, gear turning, person pointing)\n"
+        "    * DO NOT mention polygon counts, triangle counts, or any 3D modelling technical jargon.\n"
         "  narration     : string — VOICE-OVER the teacher speaks for THIS scene only.\n"
         "    STRICT RULES:\n"
         "    1. Cover ONLY what is NEW in this scene — never repeat facts from earlier scenes.\n"
         "    2. Write as flowing speech, NOT bullet points.\n"
         "    3. Use simple language a 13-year-old understands — explain any technical term immediately.\n"
         "    4. Exactly 2-3 sentences. Every sentence must add a NEW fact or observation.\n"
-        "    5. Address the student directly: start with phrases like 'Notice how', 'Watch as', 'Here'.\n"
-        "    6. NEVER begin with the scene title, scene number, or phrases like 'In this scene'.\n"
-        "    7. NEVER repeat the same sentence or idea already written in a previous scene's narration.\n\n"
+        "    5. CRITICAL: Preserve exact dates (e.g. 1969, 14 March 1879), years, proper names, and key\n"
+        "       figures exactly as they appear in the source — never paraphrase or omit a date or name.\n"
+        "    6. Address the student directly: start with phrases like 'Notice how', 'Watch as', 'Here'.\n"
+        "    7. NEVER begin with the scene title, scene number, or phrases like 'In this scene'.\n"
+        "    8. NEVER repeat the same sentence or idea already written in a previous scene's narration.\n\n"
         "JSON RULE: no literal newline or tab characters inside string values — use \\n for line breaks."
     )
     body={"model":"llama-3.3-70b-versatile",
-          "messages":[{"role":"system","content":sys_prompt},{"role":"user","content":f"Source material:\n\n{text[:6000]}"}],
+          "messages":[{"role":"system","content":sys_prompt},
+                      {"role":"user","content":f"Source material:\n\n{text[:6000]}"}],
           "temperature":0.2,"max_tokens":4096}
     hdr={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"}
     try:
@@ -242,12 +255,12 @@ def gen_scenes(text, n):
 # ─────────────────────────────────────────────────
 def img_prompt(sc):
     title=sc.get("title",""); a=", ".join(assets(sc)); lbl=", ".join(sc.get("labels",[]))
-    vd=sc.get("visual_description","")[:200]
+    vd=sc.get("visual_description","")[:300]
     lines=[l.strip() for l in sc.get("animation","").replace("\\n","\n").split("\n") if l.strip()]
     anim=" | ".join(lines[:4])
     return (f"3D CGI educational render, Blender 4 Cycles. Scene: {title}. "
             f"Show moment: {anim}. Objects: {a}. "
-            f"Camera/staging: {vd}. Label overlays near parts: {lbl}. "
+            f"Scene description: {vd}. Label overlays near parts: {lbl}. "
             "PBR materials, 4-point studio lighting, dark charcoal void background, "
             "shallow depth-of-field, 16:9. "
             "NO text, NO words, NO watermarks in image — pure clean 3D render only.")
@@ -366,8 +379,7 @@ def make_pdf(name, scenes):
     doc.build(story,onFirstPage=bg,onLaterPages=bg); buf.seek(0); return buf.getvalue(),None
 
 # ─────────────────────────────────────────────────
-# LIGHTBOX — buttons rendered at z-index:99999
-# so they sit above the dark overlay
+# LIGHTBOX
 # ─────────────────────────────────────────────────
 def show_lightbox():
     sc = st.session_state.lb_scene
@@ -379,7 +391,6 @@ def show_lightbox():
     uri   = f"data:image/png;base64,{b64}"
     cap   = f"Scene {snum:02d} · {title}"
 
-    # ── dark backdrop + image (purely visual, no interaction needed) ──
     st.markdown(f"""
     <div style="position:fixed;z-index:9000;top:0;left:0;width:100vw;height:100vh;
          background:rgba(3,3,20,0.97);backdrop-filter:blur(24px);">
@@ -395,50 +406,26 @@ def show_lightbox():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── action buttons at very high z-index via inline style injection ──
-    # We inject a wrapper that lifts the entire Streamlit button container
     st.markdown("""
     <style>
-    /* Lift the lightbox button row above the overlay */
     [data-testid="stHorizontalBlock"]:has(button[kind="secondary"][data-testid*="lb_"]),
     div[data-testid="column"]:has(button[data-testid*="lb_"]) {
-        position: relative;
-        z-index: 99999 !important;
+        position: relative; z-index: 99999 !important;
     }
-    /* Close button — prominent red-tinted */
     button[kind="secondary"][data-testid*="lb_close"] {
         background: rgba(248,113,113,0.15) !important;
         color: #f87171 !important;
         border-color: rgba(248,113,113,0.4) !important;
-        font-size: 14px !important;
-        font-weight: 700 !important;
+        font-size: 14px !important; font-weight: 700 !important;
     }
-    button[kind="secondary"][data-testid*="lb_close"]:hover {
-        background: rgba(248,113,113,0.3) !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Fixed-position button container using columns
-    # Streamlit renders these in document flow but we push them to top with CSS
-    st.markdown("""
-    <style>
-    /* Push the lightbox controls to fixed position at bottom-center */
+    button[kind="secondary"][data-testid*="lb_close"]:hover { background: rgba(248,113,113,0.3) !important; }
     div[data-testid="stHorizontalBlock"]:has([data-testid="lb_close"]) {
-        position: fixed !important;
-        bottom: 40px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        z-index: 99999 !important;
-        width: auto !important;
-        display: flex !important;
-        gap: 12px !important;
-        background: rgba(9,9,26,0.85) !important;
-        padding: 10px 20px !important;
-        border-radius: 40px !important;
-        border: 1px solid rgba(91,143,249,0.2) !important;
-        backdrop-filter: blur(12px) !important;
-        box-shadow: 0 8px 40px rgba(0,0,0,0.6) !important;
+        position: fixed !important; bottom: 40px !important; left: 50% !important;
+        transform: translateX(-50%) !important; z-index: 99999 !important;
+        width: auto !important; display: flex !important; gap: 12px !important;
+        background: rgba(9,9,26,0.85) !important; padding: 10px 20px !important;
+        border-radius: 40px !important; border: 1px solid rgba(91,143,249,0.2) !important;
+        backdrop-filter: blur(12px) !important; box-shadow: 0 8px 40px rgba(0,0,0,0.6) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -446,14 +433,9 @@ def show_lightbox():
     img_bytes = base64.b64decode(b64)
     c1, c2, c3 = st.columns([1,1,1])
     with c1:
-        st.download_button(
-            "⬇ Download",
-            data=img_bytes,
+        st.download_button("⬇ Download", data=img_bytes,
             file_name=f"scene_{snum:02d}_{title.replace(' ','_').lower()}.png",
-            mime="image/png",
-            key="lb_dl",
-            use_container_width=True,
-        )
+            mime="image/png", key="lb_dl", use_container_width=True)
     with c2:
         if st.button("🔄 Regenerate", key="lb_regen", use_container_width=True):
             cur_sb = active_sb()
@@ -470,8 +452,7 @@ def show_lightbox():
             st.rerun()
     with c3:
         if st.button("✕  Close", key="lb_close", use_container_width=True):
-            st.session_state.lb_scene = None
-            st.rerun()
+            st.session_state.lb_scene = None; st.rerun()
 
 # ─────────────────────────────────────────────────
 # SIDEBAR
@@ -516,11 +497,11 @@ with st.sidebar:
     <div style="font-size:9px;color:var(--t2);text-align:center;margin-top:10px;font-family:'DM Mono',monospace;">© 2026 LearningPad</div>""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────
-# LIGHTBOX overlay (rendered before main content)
+# LIGHTBOX overlay
 # ─────────────────────────────────────────────────
 if st.session_state.lb_scene:
     show_lightbox()
-    st.stop()   # don't render rest of page while lightbox is open
+    st.stop()
 
 # ─────────────────────────────────────────────────
 # MAIN CONTENT
@@ -540,8 +521,6 @@ st.markdown(f"""<div class="topbar">
   <span style="font-size:10px;color:var(--t2);font-family:'DM Mono',monospace;">{len(sbs)} storyboard{'s' if len(sbs)!=1 else ''}</span>
 </div>""", unsafe_allow_html=True)
 
-# ─── TAB ROUTING ──────────────────────────────────
-tab_idx = st.session_state.active_tab
 tabs = st.tabs(["📋 STORYBOARDS", "🎬 EDITOR", "📦 EXPORT"])
 
 # ════════════════════════════════════════════════════
@@ -611,29 +590,60 @@ with tabs[1]:
     else:
         has = bool(sb.get("scenes"))
 
-        # ── Controls expander ──
         with st.expander("⚙️ Generate / Input Controls", expanded=not has):
             r1, r2 = st.columns(2)
             with r1:
-                n_sc = st.slider("Number of scenes", 3, 12, 6, key="nsc")
-                src  = st.radio("Source", ["Plain Text","PDF Document"], horizontal=True, key="src_type")
+                # Auto scene count toggle
+                auto_count = st.checkbox(
+                    "🤖 Auto-detect scene count",
+                    value=False, key="auto_count",
+                    help="Let the AI decide the optimal number of scenes (4–15) based on your content."
+                )
+                if auto_count:
+                    st.markdown('<span class="auto-badge">AI decides 4–15 scenes</span>', unsafe_allow_html=True)
+                    n_sc = 0
+                else:
+                    n_sc = st.slider("Number of scenes", 3, 15, 6, key="nsc")
+
+                src = st.radio("Source", ["Plain Text","PDF Document","Image"], horizontal=True, key="src_type")
                 with_imgs = st.checkbox("🖼 Auto-generate images after scenes", value=False, key="with_imgs")
+
             with r2:
                 txt = ""
-                if src=="Plain Text":
+                src_img_b64 = None
+                src_img_mime = "image/jpeg"
+
+                if src == "Plain Text":
                     txt = st.text_area("Script / content", height=150,
                         placeholder="Paste your lesson, script or topic description here…", key="src_txt")
                     st.caption(f"{len(txt)} chars")
-                else:
+
+                elif src == "PDF Document":
                     pf = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_up")
                     if pf:
                         rd = PyPDF2.PdfReader(pf)
                         for pg in rd.pages: txt += (pg.extract_text() or "")
-                        st.success(f"✓ {len(txt)} chars extracted")
+                        st.success(f"✓ {len(txt)} chars extracted from PDF")
+
+                else:  # Image
+                    img_up = st.file_uploader(
+                        "Upload Image (JPG, PNG, WEBP)",
+                        type=["jpg","jpeg","png","webp"],
+                        key="img_src_up"
+                    )
+                    if img_up:
+                        src_img_mime = img_up.type or "image/jpeg"
+                        img_up.seek(0)
+                        src_img_b64 = base64.b64encode(img_up.read()).decode()
+                        img_up.seek(0)
+                        st.image(img_up, caption="Source image — Gemini will extract content", use_container_width=True)
+                        if not GEM_KEY:
+                            st.warning("⚠ GEMINI_API_KEY required for image-to-scenes. Add it to Secrets.")
 
             ga, gb = st.columns(2)
             with ga:
-                gen_btn = st.button(f"🚀 Generate {n_sc} Scenes", key="gen_btn", use_container_width=True)
+                btn_lbl = "🚀 Generate Scenes" if auto_count else f"🚀 Generate {n_sc} Scenes"
+                gen_btn = st.button(btn_lbl, key="gen_btn", use_container_width=True)
             with gb:
                 clr_btn = st.button("✕ Clear All", key="clr_btn", use_container_width=True)
 
@@ -641,11 +651,26 @@ with tabs[1]:
                 save_scenes([]); st.session_state.editing_scene=None; st.rerun()
 
             if gen_btn:
-                if not txt.strip():
-                    st.warning("Paste content or upload a PDF first.")
-                else:
-                    with st.spinner(f"Generating {n_sc} scenes…"):
-                        new = gen_scenes(txt, n_sc)
+                final_txt = txt.strip()
+
+                if src == "Image":
+                    if not src_img_b64:
+                        st.warning("Upload an image first.")
+                        final_txt = ""
+                    elif not GEM_KEY:
+                        st.error("GEMINI_API_KEY required for image-to-scene generation.")
+                        final_txt = ""
+                    else:
+                        with st.spinner("🔍 Extracting content from image via Gemini…"):
+                            final_txt = image_to_text_via_gemini(src_img_b64, src_img_mime) or ""
+                        if final_txt:
+                            st.success(f"✓ Extracted {len(final_txt)} chars from image")
+                        else:
+                            st.error("Could not extract content from image.")
+
+                if final_txt:
+                    with st.spinner("Generating scenes…"):
+                        new = gen_scenes(final_txt, n_sc, auto_count=auto_count)
                     if new:
                         save_scenes(new); st.session_state.editing_scene=None
                         st.success(f"✓ {len(new)} scenes generated!")
@@ -658,6 +683,8 @@ with tabs[1]:
                                 time.sleep(.15)
                             prog.progress(100,"✓ All images done!")
                         st.rerun()
+                elif src != "Image":
+                    st.warning("Paste content or upload a file first.")
 
         sb = active_sb()
         scenes = sb.get("scenes",[]) if sb else []
@@ -671,11 +698,23 @@ with tabs[1]:
                 m_labels = st.text_input("On-Screen Labels (comma-separated)", key="m_labels", placeholder="Label A, Label B")
             with mb:
                 m_narr = st.text_area("Voice-Over / Narration", key="m_narr", height=100,
-                    placeholder="Write the narrator's voice-over text here…")
+                    placeholder="Write the narrator's voice-over here. Include exact dates, names, years…")
                 m_vd   = st.text_area("Visual Description", key="m_vd", height=65,
-                    placeholder="Camera angle, lighting, object positions…")
+                    placeholder="Describe what to show: objects, arrangement, camera angle, mood…")
             m_anim = st.text_area("Animation Logic (one step per line)", key="m_anim", height=70,
                 placeholder="1. Object A moves into frame\n2. Highlight part B\n3. Camera zooms in")
+
+            # Image import for manual scene
+            st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--t2);text-transform:uppercase;margin:.6rem 0 .25rem;font-family:\'DM Mono\',monospace;">Scene Image (optional — import your own)</div>', unsafe_allow_html=True)
+            m_img_up = st.file_uploader("Import scene image", type=["jpg","jpeg","png","webp"],
+                                         key="m_img_up", label_visibility="collapsed")
+            m_img_b64 = None
+            if m_img_up:
+                m_img_up.seek(0)
+                m_img_b64 = base64.b64encode(m_img_up.read()).decode()
+                m_img_up.seek(0)
+                st.image(m_img_up, caption="Scene image preview", use_container_width=True)
+
             if st.button("➕ Add This Scene", key="m_add"):
                 if m_title.strip():
                     new_sc = {
@@ -686,7 +725,7 @@ with tabs[1]:
                         "narration": m_narr.strip(),
                         "visual_description": m_vd.strip(),
                         "animation": m_anim.strip(),
-                        "scene_image": None,
+                        "scene_image": m_img_b64,
                     }
                     scenes.append(new_sc); save_scenes(scenes); st.success("✓ Scene added!"); st.rerun()
                 else:
@@ -703,7 +742,6 @@ with tabs[1]:
             n_img = sum(1 for s in scenes if s.get("scene_image"))
             n_miss = len(scenes)-n_img
 
-            # header bar
             hc1, hc2 = st.columns([3,1])
             with hc1:
                 st.markdown(f"""<div style="padding:.55rem .9rem;background:var(--card);border:1px solid var(--b0);border-radius:9px;margin-bottom:.5rem;">
@@ -717,7 +755,6 @@ with tabs[1]:
                 if st.button(lbl, key="gen_all", use_container_width=True):
                     st.session_state.gen_all=True; st.rerun()
 
-            # generate all
             if st.session_state.gen_all:
                 st.session_state.gen_all=False
                 targets=[i for i,s in enumerate(scenes) if not s.get("scene_image")] or list(range(len(scenes)))
@@ -743,7 +780,6 @@ with tabs[1]:
                 editing  = st.session_state.editing_scene == i
 
                 with st.container():
-                    # row: badge | title | edit | gen image
                     h1,h2,h3,h4 = st.columns([.06,.5,.2,.24])
                     with h1:
                         st.markdown(f'<div class="scene-num" style="margin-top:5px;">{snum:02d}</div>', unsafe_allow_html=True)
@@ -758,35 +794,54 @@ with tabs[1]:
 
                     # EDIT MODE
                     if editing:
-                        with st.container():
-                            st.markdown('<div style="background:rgba(37,68,140,.08);border:1px solid var(--blue);border-radius:10px;padding:.85rem 1rem;margin:.4rem 0;">',
-                                        unsafe_allow_html=True)
-                            ea,eb = st.columns(2)
-                            with ea:
-                                nt = st.text_input("Title",value=title,key=f"et_{i}")
-                                na = st.text_input("Assets (comma-separated)",value=", ".join(ast_list),key=f"ea_{i}")
-                                nl = st.text_input("Labels (comma-separated)",value=", ".join(lbl_list),key=f"el_{i}")
-                            with eb:
-                                nn = st.text_area("Voice-Over / Narration",value=narr_txt,height=115,key=f"en_{i}",
-                                                  help="This is spoken by the narrator. Draw from the source text.")
-                                nv = st.text_area("Visual Description",value=vd_txt,height=70,key=f"ev_{i}")
-                            nanim = st.text_area("Animation Logic",value=anim_raw,height=80,key=f"ean_{i}")
-                            sv,_ = st.columns([1,4])
-                            with sv:
-                                if st.button("💾 Save",key=f"save_{i}",use_container_width=True):
-                                    scenes[i].update({"title":nt.strip(),
-                                        "assets":[x.strip() for x in na.split(",") if x.strip()],
-                                        "labels":[x.strip() for x in nl.split(",") if x.strip()],
-                                        "narration":nn.strip(),"visual_description":nv.strip(),"animation":nanim.strip()})
-                                    save_scenes(scenes); st.session_state.editing_scene=None; st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown('<div style="background:rgba(37,68,140,.08);border:1px solid var(--blue);border-radius:10px;padding:.85rem 1rem;margin:.4rem 0;">',
+                                    unsafe_allow_html=True)
+                        ea,eb = st.columns(2)
+                        with ea:
+                            nt = st.text_input("Title",value=title,key=f"et_{i}")
+                            na = st.text_input("Assets (comma-separated)",value=", ".join(ast_list),key=f"ea_{i}")
+                            nl = st.text_input("Labels (comma-separated)",value=", ".join(lbl_list),key=f"el_{i}")
+                        with eb:
+                            nn = st.text_area("Voice-Over / Narration",value=narr_txt,height=115,key=f"en_{i}",
+                                              help="Preserve exact dates, years, and proper names from source.")
+                            nv = st.text_area("Visual Description",value=vd_txt,height=70,key=f"ev_{i}",
+                                              help="Describe what to create: objects, arrangement, camera angle, mood.")
+                        nanim = st.text_area("Animation Logic",value=anim_raw,height=80,key=f"ean_{i}")
+
+                        # Image import / replace in edit mode
+                        st.markdown('<div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--t2);text-transform:uppercase;margin:.5rem 0 .2rem;font-family:\'DM Mono\',monospace;">Import / Replace Scene Image</div>', unsafe_allow_html=True)
+                        edit_img_up = st.file_uploader("Replace scene image", type=["jpg","jpeg","png","webp"],
+                                                        key=f"eimg_{i}", label_visibility="collapsed")
+                        new_img_b64 = img_b64
+                        if edit_img_up:
+                            edit_img_up.seek(0)
+                            new_img_b64 = base64.b64encode(edit_img_up.read()).decode()
+                            edit_img_up.seek(0)
+                            st.image(edit_img_up, caption="New image preview", use_container_width=True)
+
+                        sv, sr, _ = st.columns([1,1,3])
+                        with sv:
+                            if st.button("💾 Save",key=f"save_{i}",use_container_width=True):
+                                scenes[i].update({
+                                    "title":nt.strip(),
+                                    "assets":[x.strip() for x in na.split(",") if x.strip()],
+                                    "labels":[x.strip() for x in nl.split(",") if x.strip()],
+                                    "narration":nn.strip(),
+                                    "visual_description":nv.strip(),
+                                    "animation":nanim.strip(),
+                                    "scene_image":new_img_b64,
+                                })
+                                save_scenes(scenes); st.session_state.editing_scene=None; st.rerun()
+                        with sr:
+                            if img_b64 and st.button("🗑 Clear Img",key=f"clrimg_{i}",use_container_width=True):
+                                scenes[i]["scene_image"]=None; save_scenes(scenes); st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
 
                     # DISPLAY MODE
                     else:
                         ci, ca, cb, cn = st.columns([1,1,1,2])
                         with ci:
                             if img_b64:
-                                # Clickable thumbnail — opens lightbox on next rerun
                                 if st.button("🔍 View Full", key=f"lb_{i}", use_container_width=True):
                                     st.session_state.lb_scene = sc; st.rerun()
                                 st.markdown(f'<img src="data:image/png;base64,{img_b64}" style="width:100%;border-radius:9px;border:1px solid var(--b1);margin-top:4px;"/>',
@@ -798,8 +853,15 @@ with tabs[1]:
                             else:
                                 st.markdown("""<div class="img-placeholder">
                                   <span style="font-size:2rem;opacity:.25;">🖼</span>
-                                  <span style="font-size:11px;color:var(--t2);">No image</span>
+                                  <span style="font-size:11px;color:var(--t2);">No image — import or generate</span>
                                 </div>""", unsafe_allow_html=True)
+                                # Quick image import directly in display mode
+                                quick_img = st.file_uploader("Import image", type=["jpg","jpeg","png","webp"],
+                                                              key=f"qimp_{i}", label_visibility="collapsed")
+                                if quick_img:
+                                    quick_img.seek(0)
+                                    scenes[i]["scene_image"] = base64.b64encode(quick_img.read()).decode()
+                                    save_scenes(scenes); st.rerun()
 
                         with ca:
                             tags="".join(pill(a,"#0f1f40","#60a5fa") for a in ast_list) or '<span style="color:var(--t2);font-size:11px;">—</span>'
@@ -822,7 +884,6 @@ with tabs[1]:
                                 f'<div style="font-size:12px;color:#c4b5fd;line-height:1.7;">{vd_txt or "—"}</div>',
                                 accent="#9d71f8"), unsafe_allow_html=True)
 
-                    # single gen
                     if gen_img:
                         with st.spinner(f"Generating image for Scene {snum:02d}…"):
                             sl=st.empty(); b=gen_image(sc,sl)
@@ -830,7 +891,6 @@ with tabs[1]:
                             scenes[i]["scene_image"]=b; save_scenes(scenes)
                             st.success(f"✓ Scene {snum:02d} image done!"); st.rerun()
 
-                    # delete + divider
                     st.markdown("<div style='height:3px;'></div>", unsafe_allow_html=True)
                     _,dc=st.columns([8,1])
                     with dc:
