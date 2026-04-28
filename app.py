@@ -195,25 +195,37 @@ def strip_fence(r):
 # ─────────────────────────────────────────────────
 def gen_scenes(text, n):
     if not GROQ_KEY: st.error("Add GROQ_API_KEY to Secrets."); return None
-    sys = f"""You are a Senior 3D Instructional Animator and Educational Script Writer.
-Convert the source material into EXACTLY {n} storyboard scenes.
-Return ONLY a valid JSON array — no markdown, no explanation.
-
-Each object has EXACTLY:
-  scene_number  : int
-  title         : string (3-6 words)
-  assets        : array of 3-5 snake_case GLB filenames relevant to this scene
-  labels        : array of 2-4 short on-screen annotation strings (key terms only)
-  animation     : string — numbered steps separated by \\n describing 3D movements
-  visual_description : string — 2-3 sentences, camera angle + lighting in Blender terms
-  narration     : string — VOICE-OVER TEXT drawn directly from source material.
-                  Rules: extract/adapt exact wording from source; 2-3 clear sentences;
-                  active voice; describe what viewer sees; no invented facts.
-
-JSON RULE: no literal newlines inside string values — use \\n."""
+    sys_prompt = (
+        f"You are a Senior 3D Instructional Animator and Educational Script Writer.\n"
+        f"Convert the source material into EXACTLY {n} storyboard scenes.\n"
+        "Return ONLY a valid JSON array — no markdown, no preamble, no explanation.\n\n"
+        "Each JSON object must have EXACTLY these keys:\n\n"
+        "  scene_number  : integer (1 to N)\n"
+        "  title         : string, 3-6 words, unique per scene\n"
+        "  assets        : array of 3-5 snake_case .glb filenames for objects physically shown in THIS scene only\n"
+        "  labels        : array of 2-4 short annotation strings — only terms visible on screen in this scene\n"
+        "  animation     : string — numbered steps using \\n between steps describing 3D movements\n"
+        "  visual_description : string — HOW TO BUILD THIS SCENE IN BLENDER as low-poly GLB. Include:\n"
+        "    * Each asset as simple geometry: e.g. boiler=8-sided cylinder, piston=bevelled cube\n"
+        "    * Poly budget: 300-1500 triangles per object, no subdivisions, no sculpting\n"
+        "    * Materials: flat colour or simple PBR (1-2 colours per object), no image textures\n"
+        "    * Camera: angle + focal length (e.g. 50mm front view)\n"
+        "    * 3-point lighting: key light direction + colour, fill side, teal rim behind\n"
+        "    * Export note: apply all modifiers, triangulate mesh, export GLB Y-up\n"
+        "  narration     : string — VOICE-OVER the teacher speaks for THIS scene only.\n"
+        "    STRICT RULES:\n"
+        "    1. Cover ONLY what is NEW in this scene — never repeat facts from earlier scenes.\n"
+        "    2. Write as flowing speech, NOT bullet points.\n"
+        "    3. Use simple language a 13-year-old understands — explain any technical term immediately.\n"
+        "    4. Exactly 2-3 sentences. Every sentence must add a NEW fact or observation.\n"
+        "    5. Address the student directly: start with phrases like 'Notice how', 'Watch as', 'Here'.\n"
+        "    6. NEVER begin with the scene title, scene number, or phrases like 'In this scene'.\n"
+        "    7. NEVER repeat the same sentence or idea already written in a previous scene's narration.\n\n"
+        "JSON RULE: no literal newline or tab characters inside string values — use \\n for line breaks."
+    )
     body={"model":"llama-3.3-70b-versatile",
-          "messages":[{"role":"system","content":sys},{"role":"user","content":f"Source:\n\n{text[:6000]}"}],
-          "temperature":0.25,"max_tokens":4096}
+          "messages":[{"role":"system","content":sys_prompt},{"role":"user","content":f"Source material:\n\n{text[:6000]}"}],
+          "temperature":0.2,"max_tokens":4096}
     hdr={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"}
     try:
         r=requests.post(GROQ_URL,headers=hdr,json=body,timeout=60); r.raise_for_status()
