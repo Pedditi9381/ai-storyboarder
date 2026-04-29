@@ -635,30 +635,86 @@ st.markdown(f"""<div class="topbar">
   </span>
 </div>""", unsafe_allow_html=True)
 
-# ── Tab switching: if go_editor flag is set, fire JS via components.html ──
-# st.markdown strips <script> tags — components.html actually executes JS.
-# window.parent reaches the Streamlit parent document from the component iframe.
-if st.session_state.get("go_editor"):
-    st.session_state.go_editor = False
-    components.html("""
+# ════════════════════════════════════════════════════
+# CUSTOM TAB BAR — driven by session_state.active_tab
+# st.tabs() always resets to tab 0 on every st.rerun().
+# This renders three styled buttons as tabs; whichever
+# tab is active is remembered in session state across reruns.
+# ════════════════════════════════════════════════════
+TAB_LABELS = ["📋  STORYBOARDS", "🎬  EDITOR", "📦  EXPORT"]
+cur_tab = st.session_state.active_tab  # 0, 1, or 2
+
+# Build tab button HTML — active tab gets blue underline
+tab_btns_html = '<div style="display:flex;border-bottom:1px solid var(--b0);margin-bottom:.85rem;gap:0;">'
+for i, lbl in enumerate(TAB_LABELS):
+    active_style = (
+        "color:var(--t0)!important;border-bottom:2px solid var(--blue);"
+        if i == cur_tab else
+        "color:var(--t2);border-bottom:2px solid transparent;"
+    )
+    tab_btns_html += (
+        f'<div style="padding:.55rem 1.1rem;font-size:12px;font-weight:700;'
+        f'letter-spacing:.05em;cursor:pointer;font-family:\'Inter\',sans-serif;'
+        f'transition:all .18s;{active_style}" '
+        f'onclick="window.parent.document.querySelector(\'[data-tab-trigger=\\\"{i}\\\"]\').click()">'
+        f'{lbl}</div>'
+    )
+tab_btns_html += '</div>'
+st.markdown(tab_btns_html, unsafe_allow_html=True)
+
+# Hidden real Streamlit buttons — the JS onclick above fires these
+t0, t1, t2 = st.columns(3)
+with t0:
+    if st.button("TAB0", key="tab_btn_0"):
+        st.session_state.active_tab = 0; st.rerun()
+with t1:
+    if st.button("TAB1", key="tab_btn_1"):
+        st.session_state.active_tab = 1; st.rerun()
+with t2:
+    if st.button("TAB2", key="tab_btn_2"):
+        st.session_state.active_tab = 2; st.rerun()
+
+# Mark these hidden buttons so JS can find them by data attribute,
+# and shrink them to invisible (height:0)
+st.markdown("""
+<style>
+/* Tag each hidden tab button with a data attribute for JS targeting */
+div[data-testid="stHorizontalBlock"]:has(button[data-testid="baseButton-secondary"][key="tab_btn_0"]) button:nth-child(1){ }
+/* Simpler: hide the whole row by making it 0-height */
+div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_0"]),
+div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_1"]),
+div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_2"]) {
+  height: 0 !important; overflow: hidden !important;
+  position: absolute !important; left: -9999px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Use components.html to inject data-tab-trigger attributes onto the
+# hidden Streamlit buttons so the onclick JS can find them reliably
+components.html("""
 <script>
-(function tryClick(attempt) {
-  var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
-  if (tabs && tabs.length > 1) {
-    tabs[1].click();
-  } else if (attempt < 15) {
-    setTimeout(function(){ tryClick(attempt + 1); }, 60);
+(function tag(attempt) {
+  var doc = window.parent.document;
+  var btns = doc.querySelectorAll('button');
+  var found = 0;
+  btns.forEach(function(b) {
+    var t = b.innerText ? b.innerText.trim() : '';
+    if (t === 'TAB0') { b.setAttribute('data-tab-trigger', '0'); found++; }
+    if (t === 'TAB1') { b.setAttribute('data-tab-trigger', '1'); found++; }
+    if (t === 'TAB2') { b.setAttribute('data-tab-trigger', '2'); found++; }
+  });
+  if (found < 3 && attempt < 20) {
+    setTimeout(function(){ tag(attempt + 1); }, 50);
   }
 })(0);
 </script>
 """, height=0, scrolling=False)
 
-tabs=st.tabs(["📋  STORYBOARDS","🎬  EDITOR","📦  EXPORT"])
-
 # ════════════════════════════════════════════════════
 # TAB 0 — STORYBOARDS
 # ════════════════════════════════════════════════════
-with tabs[0]:
+if cur_tab == 0:
     c1,_=st.columns([3,5])
     with c1:
         sbn=st.text_input("🏷 Storyboard name",placeholder="Untitled Storyboard",key="new_sb_name")
@@ -671,7 +727,7 @@ with tabs[0]:
                     {"name":name,"created":_date(),"scenes":[]}
                 st.session_state.active_sb=nid
                 st.session_state.editing_scene=None
-                st.session_state.go_editor=True
+                st.session_state.active_tab=1          # ← pure Python, survives rerun
                 st.rerun()
         with cb:
             imp=st.file_uploader("📂 Import JSON",type=["json"],key="imp_sb",label_visibility="collapsed")
@@ -686,7 +742,7 @@ with tabs[0]:
                         st.session_state.projects[st.session_state.active_project]["storyboards"][nid]=\
                             {"name":nm_imp,"created":_date(),"scenes":sc_imp}
                         st.session_state.active_sb=nid
-                        st.session_state.go_editor=True
+                        st.session_state.active_tab=1  # ← pure Python
                         st.rerun()
                 except Exception as e: st.error(f"Import failed: {e}")
 
@@ -711,7 +767,7 @@ with tabs[0]:
                 if st.button("🎬 Open",key=f"open_{sid}",use_container_width=True):
                     st.session_state.active_sb=sid
                     st.session_state.editing_scene=None
-                    st.session_state.go_editor=True
+                    st.session_state.active_tab=1      # ← pure Python, survives rerun
                     st.rerun()
             with cd:
                 if st.button("🗑",key=f"dsb_{sid}",use_container_width=True):
@@ -723,7 +779,7 @@ with tabs[0]:
 # ════════════════════════════════════════════════════
 # TAB 1 — EDITOR
 # ════════════════════════════════════════════════════
-with tabs[1]:
+elif cur_tab == 1:
     sb=active_sb()
     if not sb:
         st.info("🎬 Open or create a storyboard from the **Storyboards** tab.")
