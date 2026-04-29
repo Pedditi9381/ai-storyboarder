@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests, PyPDF2, json, uuid, base64, re, io, time
 from datetime import datetime
 
@@ -418,9 +419,20 @@ def make_pdf(name, scenes):
     doc.build(story,onFirstPage=bg,onLaterPages=bg); buf.seek(0); return buf.getvalue(),None
 
 # ─────────────────────────────────────────────────
-# LIGHTBOX  — pure HTML/CSS/JS overlay
-# Close/Download/Regen are real <button>/<a> HTML elements
-# rendered at z-index 99999, no Streamlit widget issues
+# JS BRIDGE — executes real JS via components.html
+# height=0 so it takes no visual space
+# ─────────────────────────────────────────────────
+def run_js(js: str):
+    """Inject JS that actually executes (st.markdown strips <script> tags)."""
+    components.html(f"<script>{js}</script>", height=0, scrolling=False)
+
+# ─────────────────────────────────────────────────
+# LIGHTBOX — full-screen overlay
+# The overlay is rendered via st.markdown (CSS only, no JS needed for display).
+# Close / Regen use two invisible Streamlit buttons whose DOM text we find
+# with JS via run_js — but the simpler reliable approach is: render the overlay
+# HTML inside components.html itself so the buttons live in the same document
+# as the JS and can fire postMessage to the parent Streamlit frame.
 # ─────────────────────────────────────────────────
 def show_lightbox():
     sc=st.session_state.lb_scene
@@ -432,49 +444,118 @@ def show_lightbox():
     cap=f"Scene {snum:02d} · {title}"
     fname=f"scene_{snum:02d}_{title.replace(' ','_').lower()}.png"
 
-    # Render full-screen overlay with pure HTML buttons
-    # Close button posts a hidden Streamlit checkbox form to set lb_scene=None via query param
-    st.markdown(f"""
-    <div id="lp-lb-overlay">
-      <img src="{uri}" alt="{cap}"/>
-      <div id="lp-lb-cap">{cap}</div>
-      <div id="lp-lb-actions">
-        <a href="{uri}" download="{fname}" class="lp-lb-btn lp-lb-dl">⬇ Download</a>
-        <button class="lp-lb-btn lp-lb-regen" onclick="document.getElementById('lb-regen-trigger').click()">🔄 Regenerate</button>
-        <button class="lp-lb-btn lp-lb-close" onclick="document.getElementById('lb-close-trigger').click()">✕ Close</button>
-      </div>
-    </div>
+    # ── 1. Dark backdrop via st.markdown (CSS, always works) ──────────────
+    st.markdown("""
+    <style>
+    /* Push ALL normal page content behind the overlay */
+    [data-testid="stAppViewContainer"] > .main > .block-container {
+        filter: blur(2px) brightness(0.15) !important;
+        pointer-events: none !important;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    # Hidden Streamlit buttons that the JS onclick triggers
-    col_hidden1, col_hidden2 = st.columns(2)
-    with col_hidden1:
-        if st.button("_close_", key="lb-close-trigger"):
-            st.session_state.lb_scene=None; st.rerun()
-    with col_hidden2:
-        if st.button("_regen_", key="lb-regen-trigger"):
-            cur_sb=active_sb()
+    # ── 2. Overlay rendered inside components.html ─────────────────────────
+    # This iframe is 100vw × 100vh, fixed, transparent background.
+    # Buttons inside it post a message to window.parent which we listen for
+    # via a second components.html message listener further down.
+    overlay_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  body{{
+    background:rgba(3,3,20,0.97);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100vh;gap:14px;font-family:'Inter',sans-serif;
+  }}
+  img{{
+    max-width:90vw;max-height:72vh;border-radius:14px;object-fit:contain;
+    box-shadow:0 0 80px rgba(91,143,249,.4),0 0 0 1px rgba(91,143,249,.3);
+    display:block;
+  }}
+  #cap{{font-size:11px;color:#3d4068;font-family:'DM Mono',monospace;letter-spacing:.07em;}}
+  #actions{{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px;}}
+  .btn{{
+    padding:9px 22px;border-radius:22px;font-size:12px;font-weight:700;
+    cursor:pointer;border:none;transition:all .15s;font-family:'Inter',sans-serif;
+  }}
+  .dl{{background:rgba(52,211,153,.12);color:#34d399;border:1px solid rgba(52,211,153,.3)!important;text-decoration:none;display:inline-flex;align-items:center;}}
+  .dl:hover{{background:rgba(52,211,153,.25);}}
+  .regen{{background:rgba(91,143,249,.1);color:#5b8ff9;border:1px solid rgba(91,143,249,.25)!important;}}
+  .regen:hover{{background:rgba(91,143,249,.22);}}
+  .close{{background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.3)!important;}}
+  .close:hover{{background:rgba(248,113,113,.28);}}
+</style>
+</head>
+<body>
+  <img src="{uri}" alt="{cap}"/>
+  <div id="cap">{cap}</div>
+  <div id="actions">
+    <a href="{uri}" download="{fname}" class="btn dl">⬇ Download</a>
+    <button class="btn regen" onclick="window.parent.postMessage({{type:'lb_regen'}},'*')">🔄 Regenerate</button>
+    <button class="btn close" onclick="window.parent.postMessage({{type:'lb_close'}},'*')">✕ Close</button>
+  </div>
+</body>
+</html>
+"""
+    components.html(overlay_html, height=700, scrolling=False)
+
+    # ── 3. Message listener — attaches to window.parent to catch postMessages
+    # from the overlay iframe (which posts to window.parent).
+    # Once received, walks parent DOM to find the hidden Streamlit button by text.
+    listener_js = """
+<script>
+window.parent.addEventListener('message', function(e) {
+  var d = e.data;
+  if (!d || !d.type) return;
+  var label = d.type === 'lb_close' ? '__lb_close__' :
+              d.type === 'lb_regen' ? '__lb_regen__' : null;
+  if (!label) return;
+  var btns = window.parent.document.querySelectorAll('button');
+  for (var i = 0; i < btns.length; i++) {
+    if (btns[i].innerText && btns[i].innerText.trim() === label) {
+      btns[i].click();
+      return;
+    }
+  }
+}, false);
+</script>
+"""
+    components.html(listener_js, height=0, scrolling=False)
+
+    # ── 4. Hidden Streamlit buttons with unique recognisable text ──────────
+    # They are absolutely positioned off-screen so they don't affect layout.
+    st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"]:has(button.__lb_hidden__) {
+      position:fixed!important;left:-9999px!important;top:0!important;
+      width:1px!important;height:1px!important;overflow:hidden!important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    hc1, hc2 = st.columns(2)
+    with hc1:
+        if st.button("__lb_close__", key="lb_close_btn"):
+            st.session_state.lb_scene = None
+            st.rerun()
+    with hc2:
+        if st.button("__lb_regen__", key="lb_regen_btn"):
+            cur_sb = active_sb()
             if cur_sb:
-                scenes=cur_sb.get("scenes",[])
-                idx=next((j for j,s in enumerate(scenes) if s.get("scene_number")==sc.get("scene_number")),None)
+                scenes = cur_sb.get("scenes", [])
+                idx = next((j for j,s in enumerate(scenes)
+                            if s.get("scene_number") == sc.get("scene_number")), None)
                 if idx is not None:
                     with st.spinner("Regenerating…"):
-                        b=gen_image(scenes[idx])
+                        b = gen_image(scenes[idx])
                     if b:
-                        scenes[idx]["scene_image"]=b
+                        scenes[idx]["scene_image"] = b
                         save_scenes(scenes)
-                        st.session_state.lb_scene=scenes[idx]
+                        st.session_state.lb_scene = scenes[idx]
             st.rerun()
-
-    # Hide the ugly default Streamlit buttons (the overlay covers them visually,
-    # but we also shrink them to 0 so they don't affect layout)
-    st.markdown("""<style>
-    button[data-testid="lb-close-trigger"],button[data-testid="lb-regen-trigger"],
-    div[data-testid="stHorizontalBlock"]:has(button[data-testid="lb-close-trigger"]){
-      opacity:0!important;height:0!important;min-height:0!important;padding:0!important;
-      margin:0!important;overflow:hidden!important;position:absolute!important;
-    }
-    </style>""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────
 # SIDEBAR
@@ -554,16 +635,23 @@ st.markdown(f"""<div class="topbar">
   </span>
 </div>""", unsafe_allow_html=True)
 
-# ── Tab switching: if go_editor flag is set, click tab[1] via JS ──
+# ── Tab switching: if go_editor flag is set, fire JS via components.html ──
+# st.markdown strips <script> tags — components.html actually executes JS.
+# window.parent reaches the Streamlit parent document from the component iframe.
 if st.session_state.get("go_editor"):
-    st.session_state.go_editor=False
-    # Inject JS to click the second tab (index 1 = Editor)
-    st.markdown("""<script>
-    (function(){
-      var tabs=window.parent.document.querySelectorAll('[data-baseweb="tab"]');
-      if(tabs && tabs.length>1){tabs[1].click();}
-    })();
-    </script>""", unsafe_allow_html=True)
+    st.session_state.go_editor = False
+    components.html("""
+<script>
+(function tryClick(attempt) {
+  var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
+  if (tabs && tabs.length > 1) {
+    tabs[1].click();
+  } else if (attempt < 15) {
+    setTimeout(function(){ tryClick(attempt + 1); }, 60);
+  }
+})(0);
+</script>
+""", height=0, scrolling=False)
 
 tabs=st.tabs(["📋  STORYBOARDS","🎬  EDITOR","📦  EXPORT"])
 
