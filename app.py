@@ -245,14 +245,7 @@ hr { border-color: var(--border) !important; }
 .sb-name { font-size: 13px; font-weight: 700; color: var(--t0); }
 .sb-meta { font-size: 9.5px; color: var(--t2); font-family: var(--mono); margin-top: 1px; }
 
-/* Hidden tab buttons */
-div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_0"]),
-div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_1"]),
-div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_2"]) {
-  position: absolute !important; left: -9999px !important;
-  height: 0 !important; overflow: hidden !important;
-  pointer-events: none !important;
-}
+/* Hide lightbox close/regen trigger buttons */
 div[data-testid="stHorizontalBlock"]:has(button[key="lb_close_btn"]) {
   position: fixed !important; left: -9999px !important;
   top: 0 !important; width: 1px !important; height: 1px !important;
@@ -788,56 +781,58 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Tab bar ──
+# ── Tab bar — plain Streamlit buttons, no JS tricks ──
 cur_tab = st.session_state.active_tab
-TABS = [("📋", "Storyboards"), ("🎬", "Editor"), ("📦", "Export")]
 
-tab_html = '<div class="tab-bar">'
-for i, (icon, label) in enumerate(TABS):
-    cls = "active" if i == cur_tab else ""
-    tab_html += (
-        f'<div class="tab-item {cls}" '
-        f'onclick="(function(){{var b=window.parent.document.querySelector(\'button[data-tab-id=\\\"{i}\\\"]\');if(b)b.click();}})()">'
-        f'{icon} {label}</div>'
-    )
-tab_html += '</div>'
-st.markdown(tab_html, unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Style the tab row buttons to look like a tab bar */
+div[data-testid="stHorizontalBlock"]:has(button[key="tab_sb"]) {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.9rem;
+  gap: 0 !important;
+}
+div[data-testid="stHorizontalBlock"]:has(button[key="tab_sb"]) .stButton > button {
+  border-radius: 0 !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  background: transparent !important;
+  color: var(--t2) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  font-family: var(--mono) !important;
+  letter-spacing: .07em !important;
+  text-transform: uppercase !important;
+  padding: 0.5rem 1.1rem !important;
+  box-shadow: none !important;
+  width: 100% !important;
+}
+div[data-testid="stHorizontalBlock"]:has(button[key="tab_sb"]) .stButton > button:hover {
+  color: var(--t1) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+button[key="tab_sb"]         { color: var(--t0) !important; border-bottom: 2px solid var(--blue) !important; }
+button[key="tab_ed"]         { color: var(--t0) !important; border-bottom: 2px solid var(--blue) !important; }
+button[key="tab_ex"]         { color: var(--t0) !important; border-bottom: 2px solid var(--blue) !important; }
+</style>
+""", unsafe_allow_html=True)
 
-t0, t1, t2 = st.columns(3)
-with t0:
-    if st.button("\u200b", key="tab_btn_0"): st.session_state.active_tab=0; st.rerun()
-with t1:
-    if st.button("\u200b\u200b", key="tab_btn_1"): st.session_state.active_tab=1; st.rerun()
-with t2:
-    if st.button("\u200b\u200b\u200b", key="tab_btn_2"): st.session_state.active_tab=2; st.rerun()
+# Render active tab differently via conditional key naming
+_sb_key = "tab_sb" if cur_tab == 0 else "tab_sb_off"
+_ed_key = "tab_ed" if cur_tab == 1 else "tab_ed_off"
+_ex_key = "tab_ex" if cur_tab == 2 else "tab_ex_off"
 
-components.html("""
-<script>
-(function tag(n){
-  var doc=window.parent.document;
-  // Target by data-testid key attribute which Streamlit sets on the button's parent
-  var containers=doc.querySelectorAll('[data-testid="baseButton-secondary"]');
-  containers.forEach(function(b){
-    var key=b.closest('[data-stale]') || b.parentElement;
-    // Use aria-label or look for key in parent chain
-  });
-  // Fallback: tag by button order within the hidden columns block
-  var allBtns=Array.from(doc.querySelectorAll('button'));
-  var zws0=[], zws1=[], zws2=[];
-  allBtns.forEach(function(b){
-    var txt=b.textContent||'';
-    // zero-width space buttons
-    if(txt==='\u200b'){zws0.push(b);}
-    else if(txt==='\u200b\u200b'){zws1.push(b);}
-    else if(txt==='\u200b\u200b\u200b'){zws2.push(b);}
-  });
-  if(zws0[0])zws0[0].setAttribute('data-tab-id','0');
-  if(zws1[0])zws1[0].setAttribute('data-tab-id','1');
-  if(zws2[0])zws2[0].setAttribute('data-tab-id','2');
-  var found=(zws0.length>0?1:0)+(zws1.length>0?1:0)+(zws2.length>0?1:0);
-  if(found<3&&n<25)setTimeout(function(){tag(n+1);},80);
-})(0);
-</script>""", height=0, scrolling=False)
+tc1, tc2, tc3, tc4 = st.columns([1, 1, 1, 5])
+with tc1:
+    if st.button("📋  Storyboards", key=_sb_key, use_container_width=True):
+        st.session_state.active_tab = 0; st.rerun()
+with tc2:
+    if st.button("🎬  Editor", key=_ed_key, use_container_width=True):
+        st.session_state.active_tab = 1; st.rerun()
+with tc3:
+    if st.button("📦  Export", key=_ex_key, use_container_width=True):
+        st.session_state.active_tab = 2; st.rerun()
 
 # ════ TAB 0 — STORYBOARDS ════════════════════════
 if cur_tab == 0:
