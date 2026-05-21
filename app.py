@@ -251,6 +251,7 @@ div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_1"]),
 div[data-testid="stHorizontalBlock"]:has(button[key="tab_btn_2"]) {
   position: absolute !important; left: -9999px !important;
   height: 0 !important; overflow: hidden !important;
+  pointer-events: none !important;
 }
 div[data-testid="stHorizontalBlock"]:has(button[key="lb_close_btn"]) {
   position: fixed !important; left: -9999px !important;
@@ -398,9 +399,13 @@ def gen_scenes(text, n, auto_count=False):
         "  labels        : array of 2-4 short annotation strings\n"
         "  animation     : numbered steps using \\n between them\n"
         "  visual_description : vivid 3D CGI render description — objects, materials, lighting, camera angle, mood\n"
-        "  narration     : 1-2 concise sentences of voice-over. "
-        "Third person, factual, include exact dates/names. "
-        "No bullet points. No scene references.\n\n"
+        "  narration     : STRICT RULES — \n"
+        "    * Write EXACTLY 1-2 short sentences.\n"
+        "    * Use ONLY words, facts, names, and dates that appear verbatim in the source material provided.\n"
+        "    * Do NOT add any information, context, explanations, or facts not present in the source.\n"
+        "    * Do NOT paraphrase or expand — stay as close to the source wording as possible.\n"
+        "    * Do NOT start with 'In this scene', the title, or scene number.\n"
+        "    * No bullet points.\n\n"
         "JSON RULE: no literal newlines inside string values — use \\n."
     )
 
@@ -792,7 +797,7 @@ for i, (icon, label) in enumerate(TABS):
     cls = "active" if i == cur_tab else ""
     tab_html += (
         f'<div class="tab-item {cls}" '
-        f'onclick="window.parent.document.querySelector(\'[data-tab-id=\\\"{i}\\\"]\').click()">'
+        f'onclick="(function(){{var b=window.parent.document.querySelector(\'button[data-tab-id=\\\"{i}\\\"]\');if(b)b.click();}})()">'
         f'{icon} {label}</div>'
     )
 tab_html += '</div>'
@@ -800,25 +805,37 @@ st.markdown(tab_html, unsafe_allow_html=True)
 
 t0, t1, t2 = st.columns(3)
 with t0:
-    if st.button("TAB0", key="tab_btn_0"): st.session_state.active_tab=0; st.rerun()
+    if st.button("\u200b", key="tab_btn_0"): st.session_state.active_tab=0; st.rerun()
 with t1:
-    if st.button("TAB1", key="tab_btn_1"): st.session_state.active_tab=1; st.rerun()
+    if st.button("\u200b\u200b", key="tab_btn_1"): st.session_state.active_tab=1; st.rerun()
 with t2:
-    if st.button("TAB2", key="tab_btn_2"): st.session_state.active_tab=2; st.rerun()
+    if st.button("\u200b\u200b\u200b", key="tab_btn_2"): st.session_state.active_tab=2; st.rerun()
 
 components.html("""
 <script>
 (function tag(n){
   var doc=window.parent.document;
-  var btns=doc.querySelectorAll('button');
-  var found=0;
-  btns.forEach(function(b){
-    var t=(b.innerText||'').trim();
-    if(t==='TAB0'){b.setAttribute('data-tab-id','0');found++;}
-    if(t==='TAB1'){b.setAttribute('data-tab-id','1');found++;}
-    if(t==='TAB2'){b.setAttribute('data-tab-id','2');found++;}
+  // Target by data-testid key attribute which Streamlit sets on the button's parent
+  var containers=doc.querySelectorAll('[data-testid="baseButton-secondary"]');
+  containers.forEach(function(b){
+    var key=b.closest('[data-stale]') || b.parentElement;
+    // Use aria-label or look for key in parent chain
   });
-  if(found<3&&n<20)setTimeout(function(){tag(n+1);},60);
+  // Fallback: tag by button order within the hidden columns block
+  var allBtns=Array.from(doc.querySelectorAll('button'));
+  var zws0=[], zws1=[], zws2=[];
+  allBtns.forEach(function(b){
+    var txt=b.textContent||'';
+    // zero-width space buttons
+    if(txt==='\u200b'){zws0.push(b);}
+    else if(txt==='\u200b\u200b'){zws1.push(b);}
+    else if(txt==='\u200b\u200b\u200b'){zws2.push(b);}
+  });
+  if(zws0[0])zws0[0].setAttribute('data-tab-id','0');
+  if(zws1[0])zws1[0].setAttribute('data-tab-id','1');
+  if(zws2[0])zws2[0].setAttribute('data-tab-id','2');
+  var found=(zws0.length>0?1:0)+(zws1.length>0?1:0)+(zws2.length>0?1:0);
+  if(found<3&&n<25)setTimeout(function(){tag(n+1);},80);
 })(0);
 </script>""", height=0, scrolling=False)
 
