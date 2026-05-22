@@ -356,6 +356,7 @@ def init_state():
         "active_project": None,
         "active_sb": None,
         "active_tab": "Storyboards",
+        "nav_choice": "Storyboards",
         "editing_scene": None,
         "image_model": "gpt-image-1.5",
         "text_model": "gpt-5-mini",
@@ -840,14 +841,17 @@ st.markdown(
 nav_options = ["Storyboards", "Editor", "Export"]
 if st.session_state.active_tab not in nav_options:
     st.session_state.active_tab = "Storyboards"
+if st.session_state.get("nav_choice") != st.session_state.active_tab:
+    st.session_state.nav_choice = st.session_state.active_tab
 
 nav = st.radio(
     "Workspace navigation",
     nav_options,
     horizontal=True,
-    key="active_tab",
+    key="nav_choice",
     label_visibility="collapsed",
 )
+st.session_state.active_tab = nav
 
 
 if nav == "Storyboards":
