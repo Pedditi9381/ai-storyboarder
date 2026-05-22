@@ -200,6 +200,28 @@ hr { border-color: var(--line) !important; }
   margin-bottom: 10px;
 }
 
+div[role="radiogroup"] {
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  margin: -2px 0 14px;
+  padding-bottom: 10px;
+}
+div[role="radiogroup"] label {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted) !important;
+  font: 800 11px/1 var(--mono) !important;
+  letter-spacing: .06em !important;
+}
+div[role="radiogroup"] label:has(input:checked) {
+  background: #162033;
+  border-color: #31568a;
+  color: var(--text) !important;
+}
+
 .empty-state {
   border: 1px dashed var(--line-strong);
   background: var(--surface);
@@ -815,10 +837,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tabs = st.tabs(["Storyboards", "Editor", "Export"])
+nav_options = ["Storyboards", "Editor", "Export"]
+if st.session_state.active_tab not in nav_options:
+    st.session_state.active_tab = "Storyboards"
+
+nav = st.radio(
+    "Workspace navigation",
+    nav_options,
+    horizontal=True,
+    key="active_tab",
+    label_visibility="collapsed",
+)
 
 
-with tabs[0]:
+if nav == "Storyboards":
     st.markdown('<div class="tab-note">Create, import, open, and organize your storyboards.</div>', unsafe_allow_html=True)
     left, right = st.columns([.42, .58])
     with left:
@@ -869,7 +901,7 @@ with tabs[0]:
                     f"""
                     <div class="scene-card">
                       <div class="scene-title">{item.get('name', 'Untitled')}</div>
-                      <div class="scene-meta">{active} · {len(scenes)} scenes · {image_count} images · {item.get('created', '')}</div>
+                      <div class="scene-meta">{active} | {len(scenes)} scenes | {image_count} images | {item.get('created', '')}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -886,7 +918,7 @@ with tabs[0]:
                     st.rerun()
 
 
-with tabs[1]:
+elif nav == "Editor":
     storyboard = active_storyboard()
     if not storyboard:
         st.info("Open or create a storyboard first.")
@@ -989,7 +1021,7 @@ with tabs[1]:
             with summary:
                 image_count = sum(1 for scene in scenes if scene.get("scene_image"))
                 st.markdown(
-                    f'<div class="metric-line">{len(scenes)} scenes · {image_count} images · {len(scenes) - image_count} missing images</div>',
+                    f'<div class="metric-line">{len(scenes)} scenes | {image_count} images | {len(scenes) - image_count} missing images</div>',
                     unsafe_allow_html=True,
                 )
             with actions:
@@ -1018,19 +1050,36 @@ with tabs[1]:
                           <div class="scene-num">{scene.get('scene_number', idx + 1):02d}</div>
                           <div>
                             <div class="scene-title">{scene.get('title', 'Untitled')}</div>
-                            <div class="scene-meta">{len(assets(scene))} assets · {len(scene.get('labels', []))} labels</div>
+                            <div class="scene-meta">{len(assets(scene))} assets | {len(scene.get('labels', []))} labels</div>
                           </div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
                 with h2:
-                    e1, e2, e3 = st.columns(3)
+                    e1, e2, e3, e4, e5, e6 = st.columns(6)
                     with e1:
+                        if st.button("Up", key=f"up_{idx}", use_container_width=True, disabled=idx == 0):
+                            scenes[idx - 1], scenes[idx] = scenes[idx], scenes[idx - 1]
+                            save_scenes(scenes)
+                            st.rerun()
+                    with e2:
+                        if st.button("Down", key=f"down_{idx}", use_container_width=True, disabled=idx == len(scenes) - 1):
+                            scenes[idx + 1], scenes[idx] = scenes[idx], scenes[idx + 1]
+                            save_scenes(scenes)
+                            st.rerun()
+                    with e3:
+                        if st.button("Copy", key=f"copy_{idx}", use_container_width=True):
+                            duplicate = json.loads(json.dumps(scene))
+                            duplicate["title"] = f"{duplicate.get('title', 'Scene')} Copy"
+                            scenes.insert(idx + 1, duplicate)
+                            save_scenes(scenes)
+                            st.rerun()
+                    with e4:
                         if st.button("Edit" if not editing else "Close", key=f"edit_{idx}", use_container_width=True):
                             st.session_state.editing_scene = None if editing else idx
                             st.rerun()
-                    with e2:
+                    with e5:
                         if st.button("Image", key=f"img_{idx}", use_container_width=True):
                             try:
                                 with st.spinner("Generating image with OpenAI..."):
@@ -1039,7 +1088,7 @@ with tabs[1]:
                                 st.rerun()
                             except Exception as exc:
                                 st.error(str(exc))
-                    with e3:
+                    with e6:
                         if st.button("Delete", key=f"del_{idx}", use_container_width=True):
                             scenes.pop(idx)
                             save_scenes(scenes)
@@ -1114,7 +1163,7 @@ with tabs[1]:
                 st.markdown("</div>", unsafe_allow_html=True)
 
 
-with tabs[2]:
+elif nav == "Export":
     storyboard = active_storyboard()
     if not storyboard:
         st.info("Open a storyboard first.")
