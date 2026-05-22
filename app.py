@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 
 import PyPDF2
+import requests
 import streamlit as st
 
 
@@ -334,7 +335,8 @@ div[role="radiogroup"] label:has(input:checked) {
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-FREE_MODE_NOTE = "Free local mode: no API key, no quota, no external AI calls."
+FREE_MODE_NOTE = "Free mode: no API key. Images use a free public generator with local fallback."
+POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
 
 
 def now_label():
@@ -505,7 +507,7 @@ def generate_scenes(source_text, count, auto_count):
 
 def extract_image_text(b64_image, mime_type):
     return (
-        "Image uploaded by the user. Free local mode cannot read text from images "
+        "Image uploaded by the user. Free mode cannot read text from images "
         "without an OCR package or external AI service. Add the image text manually "
         "in the Plain text source for best results."
     )
@@ -589,7 +591,50 @@ def draw_arrow(draw, start, end, fill, width=5):
     draw.polygon(head, fill=fill)
 
 
+def ai_image_prompt(scene):
+    visual = scene.get("visual_description", "")
+    title = scene.get("title", "")
+    narration = scene.get("narration", "")
+    labels = ", ".join(scene.get("labels", []))
+    asset_list = ", ".join(assets(scene))
+    animation = scene.get("animation", "").replace("\\n", "\n")
+    return (
+        "High quality educational 3D CGI storyboard frame, cinematic 16:9 composition. "
+        f"Scene title: {title}. "
+        f"Visual description to follow exactly: {visual}. "
+        f"Key objects and assets: {asset_list}. "
+        f"Concept labels to represent visually, avoid readable text: {labels}. "
+        f"Animation moment: {animation}. "
+        f"Narration context: {narration}. "
+        "Photorealistic materials, professional lighting, clear subject hierarchy, sharp focus, "
+        "polished science museum style, no watermark, no logo, no UI, no captions."
+    )
+
+
+def generate_ai_image(scene):
+    prompt = requests.utils.quote(ai_image_prompt(scene)[:1600])
+    seed_src = f"{scene.get('title', '')}|{scene.get('visual_description', '')}|{scene.get('scene_number', 0)}"
+    seed = int(hashlib.md5(seed_src.encode("utf-8")).hexdigest()[:8], 16)
+    url = (
+        POLLINATIONS_URL.format(prompt=prompt)
+        + f"?width=1280&height=720&model=flux&nologo=true&enhance=true&seed={seed}"
+    )
+    response = requests.get(url, timeout=120)
+    response.raise_for_status()
+    content_type = response.headers.get("content-type", "")
+    if "image" not in content_type:
+        raise RuntimeError("The free image service did not return an image.")
+    return base64.b64encode(response.content).decode("utf-8")
+
+
 def generate_image(scene):
+    try:
+        return generate_ai_image(scene)
+    except Exception:
+        return generate_local_image(scene)
+
+
+def generate_local_image(scene):
     try:
         from PIL import Image as PILImage
         from PIL import ImageDraw, ImageFont
@@ -827,6 +872,28 @@ def read_pdf(upload):
     return "\n".join(chunks).strip()
 
 
+def storyboard_export_payload(storyboard, scenes, include_images):
+    export_scenes = []
+    for scene in scenes:
+        item = dict(scene)
+        item["assets"] = assets(item)
+        item.pop("required_assets", None)
+        item.pop("models_3d", None)
+        if not include_images:
+            item.pop("scene_image", None)
+        export_scenes.append(item)
+    return {
+        "name": storyboard.get("name", "Storyboard"),
+        "created": storyboard.get("created", ""),
+        "scenes": export_scenes,
+    }
+
+
+def safe_filename(name, suffix):
+    base = re.sub(r"[^A-Za-z0-9_-]+", "_", name or "storyboard").strip("_")
+    return f"{base or 'storyboard'}{suffix}"
+
+
 def sidebar():
     with st.sidebar:
         st.markdown(
@@ -843,7 +910,7 @@ def sidebar():
             """
             <div class="api-pill">
               <span class="dot ok"></span>
-              Free local mode
+              Free image mode
             </div>
             """,
             unsafe_allow_html=True,
@@ -1036,7 +1103,7 @@ elif nav == "Editor":
                     scenes = active_storyboard().get("scenes", [])
                     st.success(f"Created {len(scenes)} scenes.")
                     if auto_images:
-                        bar = st.progress(0, "Generating local images...")
+                        bar = st.progress(0, "Generating free AI images...")
                         for idx, scene in enumerate(scenes):
                             scene["scene_image"] = generate_image(scene)
                             save_scenes(scenes)
@@ -1095,7 +1162,7 @@ elif nav == "Editor":
                         targets = [idx for idx, scene in enumerate(scenes) if not scene.get("scene_image")]
                         if not targets:
                             targets = list(range(len(scenes)))
-                        bar = st.progress(0, "Generating local images...")
+                        bar = st.progress(0, "Generating free AI images...")
                         for step, idx in enumerate(targets):
                             scenes[idx]["scene_image"] = generate_image(scenes[idx])
                             save_scenes(scenes)
@@ -1147,7 +1214,7 @@ elif nav == "Editor":
                     with e5:
                         if st.button("Image", key=f"img_{idx}", use_container_width=True):
                             try:
-                                with st.spinner("Generating local image..."):
+                                with st.spinner("Generating free AI image..."):
                                     scenes[idx]["scene_image"] = generate_image(scene)
                                     save_scenes(scenes)
                                 st.rerun()
@@ -1241,45 +1308,35 @@ elif nav == "Export":
                 st.info("No scenes to export.")
             else:
                 include_images = st.checkbox("Include images in JSON", value=False)
-                export_scenes = []
-                for scene in scenes:
-                    item = dict(scene)
-                    item["assets"] = assets(item)
-                    item.pop("required_assets", None)
-                    item.pop("models_3d", None)
-                    if not include_images:
-                        item.pop("scene_image", None)
-                    export_scenes.append(item)
+                payload = storyboard_export_payload(storyboard, scenes, include_images)
+                json_bytes = json.dumps(payload, indent=2).encode("utf-8")
                 st.download_button(
                     "Download JSON",
-                    json.dumps(
-                        {
-                            "name": storyboard["name"],
-                            "created": storyboard.get("created", ""),
-                            "scenes": export_scenes,
-                        },
-                        indent=2,
-                    ),
-                    file_name=f"{storyboard['name'].replace(' ', '_')}_storyboard.json",
+                    data=json_bytes,
+                    file_name=safe_filename(storyboard["name"], "_storyboard.json"),
                     mime="application/json",
                     use_container_width=True,
+                    key="download_storyboard_json",
                 )
-                if st.button("Build PDF", use_container_width=True):
+                pdf_key = f"pdf_bytes_{st.session_state.active_sb}"
+                pdf_name_key = f"pdf_name_{st.session_state.active_sb}"
+                if st.button("Build PDF", use_container_width=True, key="build_pdf"):
                     with st.spinner("Building PDF..."):
                         pdf, err = pdf_export(storyboard["name"], scenes)
                     if err:
                         st.error(err)
                     else:
-                        st.session_state.pdf_bytes = pdf
-                        st.session_state.pdf_name = storyboard["name"]
+                        st.session_state[pdf_key] = pdf
+                        st.session_state[pdf_name_key] = storyboard["name"]
                         st.success("PDF ready.")
-                if st.session_state.get("pdf_bytes") and st.session_state.get("pdf_name") == storyboard["name"]:
+                if st.session_state.get(pdf_key) and st.session_state.get(pdf_name_key) == storyboard["name"]:
                     st.download_button(
                         "Download PDF",
-                        st.session_state.pdf_bytes,
-                        file_name=f"{storyboard['name'].replace(' ', '_')}.pdf",
+                        data=st.session_state[pdf_key],
+                        file_name=safe_filename(storyboard["name"], ".pdf"),
                         mime="application/pdf",
                         use_container_width=True,
+                        key="download_storyboard_pdf",
                     )
 
                 rows = [
