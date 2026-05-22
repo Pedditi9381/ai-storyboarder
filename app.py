@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import json
 import re
@@ -510,28 +511,82 @@ def extract_image_text(b64_image, mime_type):
     )
 
 
-def image_prompt(scene):
-    anim = scene.get("animation", "").replace("\\n", "\n")
-    return f"""
-Create a clean cinematic 3D educational storyboard frame.
+def wrap_lines(draw, text, font, max_width, max_lines=4):
+    words = re.sub(r"\s+", " ", text or "").strip().split()
+    lines, current = [], ""
+    for word in words:
+        trial = f"{current} {word}".strip()
+        box = draw.textbbox((0, 0), trial, font=font)
+        if box[2] - box[0] <= max_width:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            current = word
+        if len(lines) == max_lines:
+            break
+    if current and len(lines) < max_lines:
+        lines.append(current)
+    if words and len(lines) == max_lines:
+        used = " ".join(lines)
+        if len(used) < len(" ".join(words)):
+            lines[-1] = lines[-1].rstrip(".") + "..."
+    return lines
 
-Scene title: {scene.get("title", "")}
-Narration context: {scene.get("narration", "")}
-Animation moment: {anim}
-Visual direction: {scene.get("visual_description", "")}
-Objects/assets to represent: {", ".join(assets(scene))}
-Labels to imply visually without text: {", ".join(scene.get("labels", []))}
 
-Style:
-- photorealistic 3D CGI
-- clear subject hierarchy
-- realistic materials and lighting
-- dark neutral studio background
-- educational, polished, premium
-- 16:9 composition
+def text_block(draw, xy, text, font, fill, max_width, line_gap=8, max_lines=4):
+    x, y = xy
+    for line in wrap_lines(draw, text, font, max_width, max_lines):
+        draw.text((x, y), line, fill=fill, font=font)
+        box = draw.textbbox((x, y), line, font=font)
+        y = box[3] + line_gap
+    return y
 
-Do not include readable text, captions, watermarks, logos, or UI.
-""".strip()
+
+def scene_kind(scene):
+    text = " ".join(
+        [
+            scene.get("title", ""),
+            scene.get("visual_description", ""),
+            scene.get("narration", ""),
+            " ".join(scene.get("labels", [])),
+            " ".join(assets(scene)),
+        ]
+    ).lower()
+    groups = [
+        ("timeline", ["timeline", "history", "date", "year", "era", "century"]),
+        ("cycle", ["cycle", "loop", "orbit", "repeat", "circular"]),
+        ("cell", ["cell", "nucleus", "dna", "membrane", "organ", "tissue", "biology"]),
+        ("space", ["planet", "space", "star", "orbit", "galaxy", "solar"]),
+        ("map", ["map", "region", "country", "river", "route", "land", "migration"]),
+        ("data", ["chart", "graph", "data", "compare", "increase", "decrease", "number"]),
+        ("process", ["process", "flow", "step", "reaction", "transform", "sequence"]),
+    ]
+    for kind, words in groups:
+        if any(word in text for word in words):
+            return kind
+    return "concept"
+
+
+def theme_palette(scene):
+    palettes = [
+        ["#6ea8ff", "#50d5c8", "#f3bd5b", "#b99bff", "#6bd98d"],
+        ["#ff8b8b", "#ffd166", "#6bd98d", "#70d6ff", "#cdb4db"],
+        ["#80ed99", "#57cc99", "#38a3a5", "#22577a", "#c7f9cc"],
+        ["#f4a261", "#e76f51", "#2a9d8f", "#e9c46a", "#a8dadc"],
+    ]
+    digest = hashlib.md5((scene.get("title", "") + scene.get("visual_description", "")).encode()).hexdigest()
+    return palettes[int(digest[:2], 16) % len(palettes)]
+
+
+def draw_arrow(draw, start, end, fill, width=5):
+    draw.line((start, end), fill=fill, width=width)
+    sx, sy = start
+    ex, ey = end
+    angle = 0 if ex == sx else (ey - sy) / max(1, abs(ex - sx))
+    direction = 1 if ex >= sx else -1
+    head = [(ex, ey), (ex - 18 * direction, ey - 10 - angle * 4), (ex - 18 * direction, ey + 10 - angle * 4)]
+    draw.polygon(head, fill=fill)
 
 
 def generate_image(scene):
@@ -544,42 +599,108 @@ def generate_image(scene):
     width, height = 1280, 720
     image = PILImage.new("RGB", (width, height), "#07080c")
     draw = ImageDraw.Draw(image)
-    palette = ["#6ea8ff", "#50d5c8", "#f3bd5b", "#b99bff", "#6bd98d"]
+    palette = theme_palette(scene)
     title = scene.get("title", "Storyboard Scene")
     labels = scene.get("labels", [])[:4] or ["Main idea", "Detail", "Process"]
+    visual = scene.get("visual_description", "")
+    narration = scene.get("narration", "")
+    kind = scene_kind(scene)
 
     for y in range(height):
-        shade = int(8 + (y / height) * 20)
-        draw.line([(0, y), (width, y)], fill=(shade, shade + 2, shade + 8))
-
-    for idx, color in enumerate(palette):
-        x = 170 + idx * 235
-        y = 330 + (idx % 2) * 44
-        draw.ellipse((x - 82, y - 82, x + 82, y + 82), fill=color, outline="#eef2ff", width=3)
-        draw.ellipse((x - 48, y - 48, x + 48, y + 48), fill="#101218", outline="#2a3040", width=2)
-        if idx < len(labels):
-            draw.text((x - 70, y + 104), labels[idx][:18], fill="#eef2ff")
-
-    for idx in range(len(palette) - 1):
-        x1 = 252 + idx * 235
-        x2 = 88 + (idx + 1) * 235
-        y1 = 330 + (idx % 2) * 44
-        y2 = 330 + ((idx + 1) % 2) * 44
-        draw.line((x1, y1, x2, y2), fill="#3a4356", width=5)
+        shade = int(7 + (y / height) * 24)
+        draw.line([(0, y), (width, y)], fill=(shade, shade + 2, shade + 9))
 
     try:
-        title_font = ImageFont.truetype("arial.ttf", 52)
+        title_font = ImageFont.truetype("arial.ttf", 46)
+        heading_font = ImageFont.truetype("arial.ttf", 28)
         small_font = ImageFont.truetype("arial.ttf", 24)
+        tiny_font = ImageFont.truetype("arial.ttf", 18)
     except Exception:
         title_font = ImageFont.load_default()
+        heading_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
+        tiny_font = ImageFont.load_default()
 
-    draw.rounded_rectangle((58, 54, 1222, 172), radius=22, fill="#101218", outline="#2a3040", width=2)
-    draw.text((86, 80), title[:44], fill="#eef2ff", font=title_font)
-    draw.text((88, 146), "Free local storyboard frame", fill="#9aa4b8", font=small_font)
-    draw.rounded_rectangle((60, 596, 1220, 662), radius=16, fill="#101218", outline="#2a3040", width=2)
-    narration = scene.get("narration", "")[:130]
-    draw.text((88, 620), narration, fill="#ffdbe0", font=small_font)
+    # Main stage
+    draw.rounded_rectangle((54, 178, 1226, 566), radius=26, fill="#0f121a", outline="#2a3040", width=2)
+    draw.rounded_rectangle((76, 202, 840, 540), radius=22, fill="#131824", outline="#3a4356", width=2)
+
+    if kind == "timeline":
+        y = 370
+        draw.line((135, y, 782, y), fill=palette[0], width=8)
+        points = [(150, y), (345, y), (540, y), (735, y)]
+        for idx, point in enumerate(points):
+            color = palette[idx % len(palette)]
+            draw.ellipse((point[0] - 30, point[1] - 30, point[0] + 30, point[1] + 30), fill=color, outline="#eef2ff", width=3)
+            text_block(draw, (point[0] - 70, point[1] + 46), labels[idx % len(labels)], tiny_font, "#eef2ff", 140, 4, 2)
+    elif kind == "cycle":
+        center = (458, 370)
+        radius = 132
+        for idx, label in enumerate(labels[:4]):
+            angle_points = [(458, 238), (590, 370), (458, 502), (326, 370)]
+            x, y = angle_points[idx]
+            draw.ellipse((x - 48, y - 48, x + 48, y + 48), fill=palette[idx], outline="#eef2ff", width=3)
+            text_block(draw, (x - 54, y + 60), label, tiny_font, "#eef2ff", 120, 4, 2)
+        draw.arc((center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius), 15, 330, fill="#3a4356", width=8)
+        draw_arrow(draw, (570, 302), (608, 344), "#3a4356", 5)
+    elif kind == "cell":
+        draw.ellipse((210, 238, 700, 512), fill="#16251f", outline=palette[1], width=6)
+        draw.ellipse((380, 300, 530, 450), fill=palette[3], outline="#eef2ff", width=3)
+        for idx, label in enumerate(labels[:4]):
+            x = 250 + idx * 115
+            y = 290 + (idx % 2) * 118
+            draw.ellipse((x - 34, y - 22, x + 34, y + 22), fill=palette[idx], outline="#eef2ff", width=2)
+            draw.line((x + 34, y, 845, 255 + idx * 54), fill="#3a4356", width=2)
+            text_block(draw, (862, 242 + idx * 54), label, tiny_font, "#eef2ff", 220, 3, 1)
+    elif kind == "space":
+        for idx in range(26):
+            x = 100 + (idx * 73) % 700
+            y = 220 + (idx * 47) % 300
+            draw.ellipse((x, y, x + 3, y + 3), fill="#eef2ff")
+        draw.ellipse((300, 270, 540, 510), fill=palette[0], outline="#eef2ff", width=4)
+        draw.ellipse((520, 250, 610, 340), fill=palette[2], outline="#eef2ff", width=3)
+        draw.arc((215, 245, 670, 525), 195, 350, fill="#3a4356", width=4)
+        text_block(draw, (650, 278), labels[0], heading_font, "#eef2ff", 170, 4, 2)
+    elif kind == "map":
+        land = [(180, 300), (280, 238), (410, 270), (530, 235), (670, 318), (625, 455), (470, 492), (320, 450), (210, 505)]
+        draw.polygon(land, fill="#18311f", outline=palette[2])
+        draw.line((230, 455, 355, 380, 470, 405, 610, 315), fill=palette[0], width=7)
+        for idx, label in enumerate(labels[:3]):
+            x, y = [(230, 455), (355, 380), (610, 315)][idx]
+            draw.ellipse((x - 18, y - 18, x + 18, y + 18), fill=palette[idx], outline="#eef2ff", width=2)
+            text_block(draw, (x + 24, y - 12), label, tiny_font, "#eef2ff", 170, 3, 1)
+    elif kind == "data":
+        base_y = 492
+        for idx, label in enumerate(labels[:4]):
+            x = 170 + idx * 145
+            bar_h = 90 + (idx * 43) % 170
+            draw.rounded_rectangle((x, base_y - bar_h, x + 86, base_y), radius=8, fill=palette[idx], outline="#eef2ff", width=2)
+            text_block(draw, (x - 8, base_y + 16), label, tiny_font, "#eef2ff", 120, 3, 2)
+        draw.line((130, base_y, 760, base_y), fill="#3a4356", width=4)
+    else:
+        points = [(210, 360), (385, 292), (560, 382), (725, 310)]
+        for idx, point in enumerate(points[: max(3, min(4, len(labels)))]):
+            color = palette[idx % len(palette)]
+            x, y = point
+            draw.rounded_rectangle((x - 78, y - 54, x + 78, y + 54), radius=18, fill=color, outline="#eef2ff", width=3)
+            text_block(draw, (x - 58, y - 16), labels[idx % len(labels)], tiny_font, "#07080c", 116, 3, 2)
+            if idx < 3:
+                draw_arrow(draw, (x + 82, y), (points[idx + 1][0] - 84, points[idx + 1][1]), "#3a4356", 5)
+
+    # Header and visual description panel
+    draw.rounded_rectangle((54, 42, 1226, 154), radius=22, fill="#101218", outline="#2a3040", width=2)
+    text_block(draw, (82, 66), title, title_font, "#eef2ff", 760, 4, 1)
+    draw.rounded_rectangle((870, 66, 1198, 130), radius=14, fill="#17223a", outline="#31568a", width=2)
+    draw.text((895, 88), f"{kind.upper()} FRAME", fill="#9cc7ff", font=small_font)
+
+    draw.rounded_rectangle((870, 202, 1202, 540), radius=18, fill="#101218", outline="#2a3040", width=2)
+    draw.text((894, 228), "VISUAL DESCRIPTION", fill=palette[0], font=tiny_font)
+    text_block(draw, (894, 260), visual or "Clean educational storyboard visualization.", small_font, "#cfd7ea", 272, 7, 7)
+    draw.text((894, 474), "KEY LABELS", fill=palette[2], font=tiny_font)
+    text_block(draw, (894, 502), ", ".join(labels), tiny_font, "#eef2ff", 272, 5, 2)
+
+    draw.rounded_rectangle((60, 596, 1220, 672), radius=16, fill="#101218", outline="#2a3040", width=2)
+    text_block(draw, (88, 618), narration, small_font, "#ffdbe0", 1080, 6, 2)
 
     buffer = io.BytesIO()
     image.save(buffer, "PNG")
