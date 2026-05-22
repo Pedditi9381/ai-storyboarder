@@ -5,6 +5,7 @@ import json
 import re
 import time
 import uuid
+import zipfile
 from datetime import datetime
 
 import PyPDF2
@@ -335,8 +336,13 @@ div[role="radiogroup"] label:has(input:checked) {
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-FREE_MODE_NOTE = "Free mode: no API key. Images use a free public generator with local fallback."
+FREE_MODE_NOTE = "Free mode: no API key. Images use public AI models with local fallback."
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
+POLLINATION_MODELS = {
+    "Best quality": ["seedream", "flux", "turbo"],
+    "Photoreal": ["flux", "seedream", "turbo"],
+    "Fast": ["turbo", "flux", "seedream"],
+}
 
 
 def now_label():
@@ -359,6 +365,7 @@ def init_state():
         "active_tab": "Storyboards",
         "nav_choice": "Storyboards",
         "editing_scene": None,
+        "image_quality": "Best quality",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -460,6 +467,45 @@ def asset_name(word):
     return f"{safe or 'concept'}_model.glb"
 
 
+def concise_source_excerpt(text, limit=320):
+    cleaned = re.sub(r"\s+", " ", text or "").strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    cut = cleaned[:limit].rsplit(" ", 1)[0].rstrip(".,;:")
+    return f"{cut}..."
+
+
+def visual_description_for_scene(title, body, labels):
+    excerpt = concise_source_excerpt(body, 360)
+    label_text = ", ".join(labels[:4]) if labels else "the main ideas"
+    kind_hint = scene_kind(
+        {
+            "title": title,
+            "visual_description": body,
+            "narration": body,
+            "labels": labels,
+            "assets": [],
+        }
+    )
+    layout_notes = {
+        "timeline": "Use a chronological left-to-right timeline with dated milestones and clear progression.",
+        "cycle": "Use a circular cycle diagram with arrows showing repetition and cause-effect movement.",
+        "cell": "Use a magnified biological cutaway with organelles or body structures arranged accurately.",
+        "space": "Use a deep-space composition with planets, orbit paths, scale contrast, and rim lighting.",
+        "map": "Use a topographic map-like layout with routes, regions, markers, and spatial relationships.",
+        "data": "Use a clean data visualization scene with dimensional bars, comparison markers, and measured contrast.",
+        "process": "Use a step-by-step flow scene with arrows showing transformation from start to outcome.",
+        "concept": "Use a central 3D concept model surrounded by supporting objects and annotation callouts.",
+    }
+    return (
+        f"Create an accurate educational 3D visualization about '{title}'. "
+        f"Represent this exact source content: {excerpt} "
+        f"Key visual elements must include: {label_text}. "
+        f"{layout_notes.get(kind_hint, layout_notes['concept'])} "
+        "Keep the composition clear, topic-specific, cinematic, and suitable for a textbook explainer."
+    )
+
+
 def generate_scenes(source_text, count, auto_count):
     sentences = split_sentences(source_text)
     if not sentences:
@@ -493,11 +539,7 @@ def generate_scenes(source_text, count, auto_count):
                         "4. Hold on a clean final composition for narration.",
                     ]
                 ),
-                "visual_description": (
-                    f"Clean 3D educational frame showing {', '.join(labels[:3])}. "
-                    "Use a dark studio background, strong contrast, clear object spacing, "
-                    "and a polished classroom presentation style."
-                ),
+                "visual_description": visual_description_for_scene(title, body, labels),
                 "narration": narration,
                 "scene_image": None,
             }
@@ -599,32 +641,41 @@ def ai_image_prompt(scene):
     asset_list = ", ".join(assets(scene))
     animation = scene.get("animation", "").replace("\\n", "\n")
     return (
-        "High quality educational 3D CGI storyboard frame, cinematic 16:9 composition. "
-        f"Scene title: {title}. "
-        f"Visual description to follow exactly: {visual}. "
-        f"Key objects and assets: {asset_list}. "
-        f"Concept labels to represent visually, avoid readable text: {labels}. "
-        f"Animation moment: {animation}. "
+        "Premium educational 3D CGI storyboard frame, cinematic 16:9, high detail, sharp focus. "
+        f"Main topic: {title}. "
+        f"FOLLOW THIS VISUAL DESCRIPTION EXACTLY: {visual}. "
+        f"Important objects or assets to show: {asset_list}. "
+        f"Important concepts to show visually: {labels}. "
+        f"Action or moment: {animation}. "
         f"Narration context: {narration}. "
-        "Photorealistic materials, professional lighting, clear subject hierarchy, sharp focus, "
-        "polished science museum style, no watermark, no logo, no UI, no captions."
+        "Use accurate subject-specific objects, realistic scale relationships, professional studio lighting, "
+        "clear foreground/midground/background, rich materials, educational museum exhibit quality. "
+        "Avoid random fantasy elements. Avoid unrelated objects. No watermark, no logo, no UI, no captions, no text."
     )
 
 
 def generate_ai_image(scene):
-    prompt = requests.utils.quote(ai_image_prompt(scene)[:1600])
+    prompt_text = ai_image_prompt(scene)[:2200]
+    prompt = requests.utils.quote(prompt_text)
     seed_src = f"{scene.get('title', '')}|{scene.get('visual_description', '')}|{scene.get('scene_number', 0)}"
     seed = int(hashlib.md5(seed_src.encode("utf-8")).hexdigest()[:8], 16)
-    url = (
-        POLLINATIONS_URL.format(prompt=prompt)
-        + f"?width=1280&height=720&model=flux&nologo=true&enhance=true&seed={seed}"
-    )
-    response = requests.get(url, timeout=120)
-    response.raise_for_status()
-    content_type = response.headers.get("content-type", "")
-    if "image" not in content_type:
-        raise RuntimeError("The free image service did not return an image.")
-    return base64.b64encode(response.content).decode("utf-8")
+    model_group = st.session_state.get("image_quality", "Best quality")
+    errors = []
+    for model in POLLINATION_MODELS.get(model_group, POLLINATION_MODELS["Best quality"]):
+        url = (
+            POLLINATIONS_URL.format(prompt=prompt)
+            + f"?width=1536&height=864&model={model}&nologo=true&enhance=true&private=true&seed={seed}"
+        )
+        try:
+            response = requests.get(url, timeout=150)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "")
+            if "image" not in content_type:
+                raise RuntimeError("The free image service did not return an image.")
+            return base64.b64encode(response.content).decode("utf-8")
+        except Exception as exc:
+            errors.append(f"{model}: {exc}")
+    raise RuntimeError("; ".join(errors))
 
 
 def generate_image(scene):
@@ -894,6 +945,23 @@ def safe_filename(name, suffix):
     return f"{base or 'storyboard'}{suffix}"
 
 
+def images_zip_bytes(storyboard_name, scenes):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        count = 0
+        for idx, scene in enumerate(scenes, start=1):
+            if not scene.get("scene_image"):
+                continue
+            title = re.sub(r"[^A-Za-z0-9_-]+", "_", scene.get("title", f"scene_{idx}")).strip("_")
+            filename = f"scene_{idx:02d}_{title or 'image'}.png"
+            archive.writestr(filename, base64.b64decode(scene["scene_image"]))
+            count += 1
+        if count == 0:
+            archive.writestr("README.txt", "No generated scene images were found in this storyboard.")
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def sidebar():
     with st.sidebar:
         st.markdown(
@@ -918,6 +986,12 @@ def sidebar():
 
         st.markdown("---")
         st.caption(FREE_MODE_NOTE)
+        st.session_state.image_quality = st.selectbox(
+            "Image generation style",
+            list(POLLINATION_MODELS.keys()),
+            index=list(POLLINATION_MODELS.keys()).index(st.session_state.get("image_quality", "Best quality")),
+            help="Best quality tries the strongest free public model first, then falls back automatically.",
+        )
 
         st.markdown("---")
         st.caption("Projects")
@@ -1307,6 +1381,8 @@ elif nav == "Export":
             if not scenes:
                 st.info("No scenes to export.")
             else:
+                image_count = sum(1 for scene in scenes if scene.get("scene_image"))
+                st.caption(f"{len(scenes)} scenes ready. {image_count} scenes include images.")
                 include_images = st.checkbox("Include images in JSON", value=False)
                 payload = storyboard_export_payload(storyboard, scenes, include_images)
                 json_bytes = json.dumps(payload, indent=2).encode("utf-8")
@@ -1318,6 +1394,15 @@ elif nav == "Export":
                     use_container_width=True,
                     key="download_storyboard_json",
                 )
+                if image_count:
+                    st.download_button(
+                        "Download Images ZIP",
+                        data=images_zip_bytes(storyboard["name"], scenes),
+                        file_name=safe_filename(storyboard["name"], "_images.zip"),
+                        mime="application/zip",
+                        use_container_width=True,
+                        key="download_images_zip",
+                    )
                 pdf_key = f"pdf_bytes_{st.session_state.active_sb}"
                 pdf_name_key = f"pdf_name_{st.session_state.active_sb}"
                 if st.button("Build PDF", use_container_width=True, key="build_pdf"):
