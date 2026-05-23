@@ -336,7 +336,9 @@ div[role="radiogroup"] label:has(input:checked) {
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-FREE_MODE_NOTE = "Free mode: no API key. Images use public AI models with local fallback."
+APP_MODE_NOTE = "ChatGPT creates storyboards. Stability AI creates high-quality images."
+OPENAI_URL = "https://api.openai.com/v1/responses"
+STABILITY_CORE_URL = "https://api.stability.ai/v2beta/stable-image/generate/core"
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
 POLLINATION_MODELS = {
     "Best quality": ["seedream", "flux", "turbo"],
@@ -366,6 +368,7 @@ def init_state():
         "nav_choice": "Storyboards",
         "editing_scene": None,
         "image_quality": "Best quality",
+        "openai_model": "gpt-5-mini",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -374,6 +377,21 @@ def init_state():
 
 
 init_state()
+
+
+def secret(name):
+    try:
+        return st.secrets.get(name)
+    except Exception:
+        return None
+
+
+def openai_key():
+    return secret("OPENAI_API_KEY") or st.session_state.get("openai_key", "").strip()
+
+
+def stability_key():
+    return secret("STABILITY_API_KEY") or st.session_state.get("stability_key", "").strip()
 
 
 def active_project():
@@ -414,6 +432,74 @@ def clean_json_text(text):
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
+
+
+def openai_response_text(payload):
+    key = openai_key()
+    if not key:
+        raise RuntimeError("Add OPENAI_API_KEY in Secrets or the sidebar. Storyboards are generated with ChatGPT only.")
+    response = requests.post(
+        OPENAI_URL,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=120,
+    )
+    if response.status_code >= 400:
+        try:
+            msg = response.json().get("error", {}).get("message", response.text)
+        except Exception:
+            msg = response.text
+        raise RuntimeError(f"ChatGPT API error {response.status_code}: {msg}")
+    data = response.json()
+    if data.get("output_text"):
+        return data["output_text"]
+    parts = []
+    for item in data.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") in {"output_text", "text"}:
+                parts.append(content.get("text", ""))
+    return "\n".join(parts).strip()
+
+
+def storyboard_schema():
+    scene_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "scene_number",
+            "title",
+            "assets",
+            "labels",
+            "animation",
+            "visual_description",
+            "narration",
+        ],
+        "properties": {
+            "scene_number": {"type": "integer"},
+            "title": {"type": "string"},
+            "assets": {"type": "array", "items": {"type": "string"}},
+            "labels": {"type": "array", "items": {"type": "string"}},
+            "animation": {"type": "string"},
+            "visual_description": {"type": "string"},
+            "narration": {"type": "string"},
+        },
+    }
+    return {
+        "type": "json_schema",
+        "name": "storyboard",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["scenes"],
+            "properties": {
+                "scenes": {
+                    "type": "array",
+                    "items": scene_schema,
+                }
+            },
+        },
+    }
 
 
 STOP_WORDS = {
@@ -572,71 +658,99 @@ def visual_description_for_scene(title, body, labels, scene_number=1):
 
 
 def refresh_scene_descriptions(scenes):
-    for idx, scene in enumerate(scenes, start=1):
-        body = " ".join(
-            [
-                scene.get("title", ""),
-                scene.get("narration", ""),
-                scene.get("animation", ""),
-                " ".join(scene.get("labels", [])),
-            ]
-        )
-        labels = scene_terms(body, 4) or scene.get("labels", []) or [f"Key Point {idx}"]
-        scene["labels"] = labels[:4]
-        scene["title"] = title_from_text(body, scene.get("title", f"Scene {idx}"))
-        scene["assets"] = [asset_name(term) for term in labels[:4]]
-        if len(scene["assets"]) < 2:
-            scene["assets"].append("supporting_visual_model.glb")
-        scene["visual_description"] = visual_description_for_scene(scene["title"], body, labels, idx)
-    return renumber_scenes(scenes)
+    prompt = f"""
+You are ChatGPT, a senior storyboard visual director.
+
+Rewrite these storyboard scenes so each scene has a unique, topic-accurate title, labels, assets,
+animation, narration, and especially visual_description.
+
+Rules:
+- Preserve the same number of scenes and the same lesson order.
+- visual_description must be 55 to 95 words and must describe concrete subject-specific objects.
+- Do not use graph/chart imagery unless the scene is actually about data.
+- Do not repeat the same visual description pattern.
+- Make each image prompt useful for a high-quality image model.
+
+Scenes:
+{json.dumps(scenes, indent=2)[:14000]}
+""".strip()
+    payload = {
+        "model": st.session_state.get("openai_model", "gpt-5-mini"),
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "text": {"format": storyboard_schema()},
+    }
+    raw = openai_response_text(payload)
+    data = json.loads(clean_json_text(raw))
+    refreshed = data.get("scenes", scenes)
+    for idx, scene in enumerate(refreshed):
+        if idx < len(scenes):
+            scene["scene_image"] = scenes[idx].get("scene_image")
+    return renumber_scenes(refreshed)
 
 
 def generate_scenes(source_text, count, auto_count):
-    sentences = split_sentences(source_text)
-    if not sentences:
-        sentences = [source_text.strip()]
-    if auto_count:
-        count = min(15, max(4, round(len(sentences) / 3)))
-    chunks = chunk_sentences(sentences, count)
-    scenes = []
-    for idx, chunk in enumerate(chunks, start=1):
-        body = " ".join(chunk).strip()
-        labels = scene_terms(body, 4) or [f"Key Point {idx}"]
-        scene_assets = [asset_name(word) for word in (labels[:4] or ["main_concept", "supporting_visual"])]
-        if len(scene_assets) < 2:
-            scene_assets.append("supporting_visual.glb")
-        narration = " ".join(chunk[:2]).strip()
-        if len(narration) > 280:
-            narration = narration[:277].rstrip() + "..."
-        title = title_from_text(body, f"Scene {idx}")
-        scenes.append(
-            {
-                "scene_number": idx,
-                "title": title,
-                "assets": scene_assets,
-                "labels": labels,
-                "animation": "\n".join(
-                    [
-                        "1. Establish the main visual and key subject.",
-                        "2. Bring in supporting objects and labels.",
-                        "3. Highlight the most important relationship or process.",
-                        "4. Hold on a clean final composition for narration.",
-                    ]
-                ),
-                "visual_description": visual_description_for_scene(title, body, labels, idx),
-                "narration": narration,
-                "scene_image": None,
-            }
-        )
+    count_rule = (
+        "Choose the best number of scenes between 4 and 15 based on the source."
+        if auto_count
+        else f"Create exactly {count} scenes."
+    )
+    prompt = f"""
+You are ChatGPT, a senior educational storyboard writer and visual director.
+
+{count_rule}
+
+Create a clear storyboard from the source. Each scene must be distinct and must move the lesson forward.
+
+For every scene:
+- title: specific to that scene, not generic
+- assets: 3 to 6 snake_case .glb file names matching the actual topic
+- labels: 2 to 5 short labels from the actual topic
+- animation: 3 to 5 numbered animation steps separated by newlines
+- visual_description: highly specific image-generation prompt material, 55 to 95 words, describing exact objects, setting, composition, camera, lighting, and what must NOT appear
+- narration: 1 to 2 clear sentences explaining that scene
+
+Do not repeat the same visual description structure across scenes.
+Do not invent unrelated facts. Stay grounded in the source material.
+
+Source material:
+{source_text[:14000]}
+""".strip()
+    payload = {
+        "model": st.session_state.get("openai_model", "gpt-5-mini"),
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "text": {"format": storyboard_schema()},
+    }
+    raw = openai_response_text(payload)
+    data = json.loads(clean_json_text(raw))
+    scenes = data.get("scenes", [])
+    for scene in scenes:
+        scene["scene_image"] = None
     return renumber_scenes(scenes)
 
 
 def extract_image_text(b64_image, mime_type):
-    return (
-        "Image uploaded by the user. Free mode cannot read text from images "
-        "without an OCR package or external AI service. Add the image text manually "
-        "in the Plain text source for best results."
-    )
+    payload = {
+        "model": st.session_state.get("openai_model", "gpt-5-mini"),
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Extract all educational text, labels, names, dates, facts, concepts, "
+                            "and diagram relationships visible in this image. Return plain text only."
+                        ),
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:{mime_type};base64,{b64_image}",
+                    },
+                ],
+            }
+        ],
+    }
+    return openai_response_text(payload)
 
 
 def wrap_lines(draw, text, font, max_width, max_lines=4):
@@ -724,6 +838,12 @@ def ai_image_prompt(scene):
     labels = ", ".join(scene.get("labels", []))
     asset_list = ", ".join(assets(scene))
     animation = scene.get("animation", "").replace("\\n", "\n")
+    kind = scene_kind(scene)
+    graph_rule = (
+        "Graphs, charts, and infographic bars are allowed because this scene is about data."
+        if kind == "data"
+        else "Do not show graphs, charts, bar charts, line charts, dashboards, or abstract infographic panels."
+    )
     return (
         "Premium educational 3D CGI storyboard frame, cinematic 16:9, high detail, sharp focus. "
         f"The image MUST depict this exact topic: {title}. "
@@ -732,6 +852,7 @@ def ai_image_prompt(scene):
         f"Represent these concepts as objects or callouts without readable text: {labels}. "
         f"Use this source context to avoid unrelated imagery: {narration}. "
         f"Show this action or relationship: {animation}. "
+        f"{graph_rule} "
         "Use accurate subject-specific objects, realistic scale relationships, professional studio lighting, "
         "clear foreground/midground/background, rich materials, educational museum exhibit quality. "
         "Do not create a generic classroom, random icons, fantasy elements, unrelated landscapes, or abstract decoration. "
@@ -740,6 +861,47 @@ def ai_image_prompt(scene):
 
 
 def generate_ai_image(scene):
+    key = stability_key()
+    if key:
+        try:
+            return generate_stability_image(scene, key)
+        except Exception:
+            pass
+    return generate_pollinations_image(scene)
+
+
+def generate_stability_image(scene, key):
+    prompt_text = ai_image_prompt(scene)[:3500]
+    response = requests.post(
+        STABILITY_CORE_URL,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Accept": "image/*",
+        },
+        files={
+            "prompt": (None, prompt_text),
+            "output_format": (None, "png"),
+            "aspect_ratio": (None, "16:9"),
+            "negative_prompt": (
+                None,
+                "graph chart random icons generic classroom unrelated objects text watermark logo blurry low quality",
+            ),
+        },
+        timeout=180,
+    )
+    if response.status_code >= 400:
+        try:
+            msg = response.json().get("message", response.text)
+        except Exception:
+            msg = response.text
+        raise RuntimeError(f"Stability AI image error {response.status_code}: {msg}")
+    content_type = response.headers.get("content-type", "")
+    if "image" not in content_type:
+        raise RuntimeError("Stability AI did not return an image.")
+    return base64.b64encode(response.content).decode("utf-8")
+
+
+def generate_pollinations_image(scene):
     prompt_text = ai_image_prompt(scene)[:2200]
     prompt = requests.utils.quote(prompt_text)
     seed_src = f"{scene.get('title', '')}|{scene.get('visual_description', '')}|{scene.get('scene_number', 0)}"
@@ -1060,22 +1222,36 @@ def sidebar():
         )
 
         st.markdown(
-            """
+            f"""
             <div class="api-pill">
-              <span class="dot ok"></span>
-              Free image mode
+              <span class="dot {'ok' if openai_key() else ''}"></span>
+              ChatGPT {'connected' if openai_key() else 'missing'}
+            </div>
+            <div style="height:8px"></div>
+            <div class="api-pill">
+              <span class="dot {'ok' if stability_key() else ''}"></span>
+              Stability AI {'connected' if stability_key() else 'fallback'}
             </div>
             """,
             unsafe_allow_html=True,
         )
 
         st.markdown("---")
-        st.caption(FREE_MODE_NOTE)
+        st.caption(APP_MODE_NOTE)
+        if not secret("OPENAI_API_KEY"):
+            st.text_input("OpenAI API Key", type="password", key="openai_key", placeholder="sk-...")
+        if not secret("STABILITY_API_KEY"):
+            st.text_input("Stability API Key", type="password", key="stability_key", placeholder="sk-...")
+        st.session_state.openai_model = st.text_input(
+            "ChatGPT model",
+            value=st.session_state.get("openai_model", "gpt-5-mini"),
+            help="Used only for storyboard/script/visual-description generation.",
+        )
         st.session_state.image_quality = st.selectbox(
-            "Image generation style",
+            "Fallback image style",
             list(POLLINATION_MODELS.keys()),
             index=list(POLLINATION_MODELS.keys()).index(st.session_state.get("image_quality", "Best quality")),
-            help="Best quality tries the strongest free public model first, then falls back automatically.",
+            help="Used only if Stability AI is not configured or fails.",
         )
 
         st.markdown("---")
@@ -1216,7 +1392,7 @@ elif nav == "Editor":
     else:
         scenes = storyboard.get("scenes", [])
 
-        with st.expander("Generate scenes free locally", expanded=not scenes):
+        with st.expander("Generate storyboard with ChatGPT", expanded=not scenes):
             c1, c2 = st.columns([.4, .6])
             with c1:
                 source_type = st.radio("Source", ["Plain text", "PDF", "Image"], horizontal=True)
@@ -1248,12 +1424,12 @@ elif nav == "Editor":
                         if not image_b64:
                             st.warning("Upload an image first.")
                             st.stop()
-                        with st.spinner("Preparing image source in free local mode..."):
+                        with st.spinner("ChatGPT is reading the image..."):
                             final_text = extract_image_text(image_b64, image_mime)
                     if not final_text:
                         st.warning("Add source content first.")
                         st.stop()
-                    with st.spinner("Creating storyboard scenes locally..."):
+                    with st.spinner("ChatGPT is creating the storyboard..."):
                         new_scenes = generate_scenes(final_text, scene_count, auto_count)
                     if not new_scenes:
                         st.error("No scenes were returned.")
@@ -1262,7 +1438,7 @@ elif nav == "Editor":
                     scenes = active_storyboard().get("scenes", [])
                     st.success(f"Created {len(scenes)} scenes.")
                     if auto_images:
-                        bar = st.progress(0, "Generating free AI images...")
+                        bar = st.progress(0, "Generating images...")
                         for idx, scene in enumerate(scenes):
                             scene["scene_image"] = generate_image(scene)
                             save_scenes(scenes)
@@ -1304,7 +1480,7 @@ elif nav == "Editor":
 
         if not scenes:
             st.markdown(
-                '<div class="empty-state"><strong>No scenes yet</strong>Generate scenes locally or add one manually.</div>',
+                '<div class="empty-state"><strong>No scenes yet</strong>Generate scenes with ChatGPT or add one manually.</div>',
                 unsafe_allow_html=True,
             )
         else:
@@ -1330,7 +1506,7 @@ elif nav == "Editor":
                         targets = [idx for idx, scene in enumerate(scenes) if not scene.get("scene_image")]
                         if not targets:
                             targets = list(range(len(scenes)))
-                        bar = st.progress(0, "Generating free AI images...")
+                        bar = st.progress(0, "Generating images...")
                         for step, idx in enumerate(targets):
                             scenes[idx]["scene_image"] = generate_image(scenes[idx])
                             save_scenes(scenes)
@@ -1382,7 +1558,7 @@ elif nav == "Editor":
                     with e5:
                         if st.button("Image", key=f"img_{idx}", use_container_width=True):
                             try:
-                                with st.spinner("Generating free AI image..."):
+                                with st.spinner("Generating image..."):
                                     scenes[idx]["scene_image"] = generate_image(scene)
                                     save_scenes(scenes)
                                 st.rerun()
