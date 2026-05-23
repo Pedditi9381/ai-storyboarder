@@ -336,8 +336,8 @@ div[role="radiogroup"] label:has(input:checked) {
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-APP_MODE_NOTE = "ChatGPT creates storyboards. Stability AI creates high-quality images."
-OPENAI_URL = "https://api.openai.com/v1/responses"
+APP_MODE_NOTE = "Groq creates storyboards. Stability AI creates high-quality images."
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 STABILITY_CORE_URL = "https://api.stability.ai/v2beta/stable-image/generate/core"
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
 POLLINATION_MODELS = {
@@ -368,7 +368,7 @@ def init_state():
         "nav_choice": "Storyboards",
         "editing_scene": None,
         "image_quality": "Best quality",
-        "openai_model": "gpt-5-mini",
+        "groq_model": "llama-3.3-70b-versatile",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -386,8 +386,8 @@ def secret(name):
         return None
 
 
-def openai_key():
-    return secret("OPENAI_API_KEY") or st.session_state.get("openai_key", "").strip()
+def groq_key():
+    return secret("GROQ_API_KEY") or st.session_state.get("groq_key", "").strip()
 
 
 def stability_key():
@@ -434,12 +434,20 @@ def clean_json_text(text):
     return text.strip()
 
 
-def openai_response_text(payload):
-    key = openai_key()
+def groq_chat_text(messages, response_format=None, max_tokens=4096):
+    key = groq_key()
     if not key:
-        raise RuntimeError("Add OPENAI_API_KEY in Secrets or the sidebar. Storyboards are generated with ChatGPT only.")
+        raise RuntimeError("Add GROQ_API_KEY in Secrets or the sidebar. Storyboards are generated with Groq.")
+    payload = {
+        "model": st.session_state.get("groq_model", "llama-3.3-70b-versatile"),
+        "messages": messages,
+        "temperature": 0.25,
+        "max_tokens": max_tokens,
+    }
+    if response_format:
+        payload["response_format"] = response_format
     response = requests.post(
-        OPENAI_URL,
+        GROQ_URL,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json=payload,
         timeout=120,
@@ -449,16 +457,8 @@ def openai_response_text(payload):
             msg = response.json().get("error", {}).get("message", response.text)
         except Exception:
             msg = response.text
-        raise RuntimeError(f"ChatGPT API error {response.status_code}: {msg}")
-    data = response.json()
-    if data.get("output_text"):
-        return data["output_text"]
-    parts = []
-    for item in data.get("output", []):
-        for content in item.get("content", []):
-            if content.get("type") in {"output_text", "text"}:
-                parts.append(content.get("text", ""))
-    return "\n".join(parts).strip()
+        raise RuntimeError(f"Groq API error {response.status_code}: {msg}")
+    return response.json()["choices"][0]["message"]["content"].strip()
 
 
 def storyboard_schema():
@@ -659,7 +659,7 @@ def visual_description_for_scene(title, body, labels, scene_number=1):
 
 def refresh_scene_descriptions(scenes):
     prompt = f"""
-You are ChatGPT, a senior storyboard visual director.
+You are a senior storyboard visual director.
 
 Rewrite these storyboard scenes so each scene has a unique, topic-accurate title, labels, assets,
 animation, narration, and especially visual_description.
@@ -674,12 +674,14 @@ Rules:
 Scenes:
 {json.dumps(scenes, indent=2)[:14000]}
 """.strip()
-    payload = {
-        "model": st.session_state.get("openai_model", "gpt-5-mini"),
-        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-        "text": {"format": storyboard_schema()},
-    }
-    raw = openai_response_text(payload)
+    raw = groq_chat_text(
+        [
+            {"role": "system", "content": "Return only valid JSON matching the requested schema. No markdown."},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=4096,
+    )
     data = json.loads(clean_json_text(raw))
     refreshed = data.get("scenes", scenes)
     for idx, scene in enumerate(refreshed):
@@ -695,7 +697,7 @@ def generate_scenes(source_text, count, auto_count):
         else f"Create exactly {count} scenes."
     )
     prompt = f"""
-You are ChatGPT, a senior educational storyboard writer and visual director.
+You are a senior educational storyboard writer and visual director.
 
 {count_rule}
 
@@ -715,12 +717,14 @@ Do not invent unrelated facts. Stay grounded in the source material.
 Source material:
 {source_text[:14000]}
 """.strip()
-    payload = {
-        "model": st.session_state.get("openai_model", "gpt-5-mini"),
-        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-        "text": {"format": storyboard_schema()},
-    }
-    raw = openai_response_text(payload)
+    raw = groq_chat_text(
+        [
+            {"role": "system", "content": "Return only valid JSON matching the requested schema. No markdown."},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=4096,
+    )
     data = json.loads(clean_json_text(raw))
     scenes = data.get("scenes", [])
     for scene in scenes:
@@ -729,28 +733,10 @@ Source material:
 
 
 def extract_image_text(b64_image, mime_type):
-    payload = {
-        "model": st.session_state.get("openai_model", "gpt-5-mini"),
-        "input": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": (
-                            "Extract all educational text, labels, names, dates, facts, concepts, "
-                            "and diagram relationships visible in this image. Return plain text only."
-                        ),
-                    },
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:{mime_type};base64,{b64_image}",
-                    },
-                ],
-            }
-        ],
-    }
-    return openai_response_text(payload)
+    return (
+        "Image upload was received, but this Groq storyboard model is text-only in this app. "
+        "Please paste the text from the image into Plain text source for accurate storyboard generation."
+    )
 
 
 def wrap_lines(draw, text, font, max_width, max_lines=4):
@@ -1224,8 +1210,8 @@ def sidebar():
         st.markdown(
             f"""
             <div class="api-pill">
-              <span class="dot {'ok' if openai_key() else ''}"></span>
-              ChatGPT {'connected' if openai_key() else 'missing'}
+              <span class="dot {'ok' if groq_key() else ''}"></span>
+              Groq {'connected' if groq_key() else 'missing'}
             </div>
             <div style="height:8px"></div>
             <div class="api-pill">
@@ -1238,13 +1224,13 @@ def sidebar():
 
         st.markdown("---")
         st.caption(APP_MODE_NOTE)
-        if not secret("OPENAI_API_KEY"):
-            st.text_input("OpenAI API Key", type="password", key="openai_key", placeholder="sk-...")
+        if not secret("GROQ_API_KEY"):
+            st.text_input("Groq API Key", type="password", key="groq_key", placeholder="gsk_...")
         if not secret("STABILITY_API_KEY"):
             st.text_input("Stability API Key", type="password", key="stability_key", placeholder="sk-...")
-        st.session_state.openai_model = st.text_input(
-            "ChatGPT model",
-            value=st.session_state.get("openai_model", "gpt-5-mini"),
+        st.session_state.groq_model = st.text_input(
+            "Groq model",
+            value=st.session_state.get("groq_model", "llama-3.3-70b-versatile"),
             help="Used only for storyboard/script/visual-description generation.",
         )
         st.session_state.image_quality = st.selectbox(
@@ -1392,7 +1378,7 @@ elif nav == "Editor":
     else:
         scenes = storyboard.get("scenes", [])
 
-        with st.expander("Generate storyboard with ChatGPT", expanded=not scenes):
+        with st.expander("Generate storyboard with Groq", expanded=not scenes):
             c1, c2 = st.columns([.4, .6])
             with c1:
                 source_type = st.radio("Source", ["Plain text", "PDF", "Image"], horizontal=True)
@@ -1424,12 +1410,12 @@ elif nav == "Editor":
                         if not image_b64:
                             st.warning("Upload an image first.")
                             st.stop()
-                        with st.spinner("ChatGPT is reading the image..."):
+                        with st.spinner("Preparing image source..."):
                             final_text = extract_image_text(image_b64, image_mime)
                     if not final_text:
                         st.warning("Add source content first.")
                         st.stop()
-                    with st.spinner("ChatGPT is creating the storyboard..."):
+                    with st.spinner("Groq is creating the storyboard..."):
                         new_scenes = generate_scenes(final_text, scene_count, auto_count)
                     if not new_scenes:
                         st.error("No scenes were returned.")
@@ -1480,7 +1466,7 @@ elif nav == "Editor":
 
         if not scenes:
             st.markdown(
-                '<div class="empty-state"><strong>No scenes yet</strong>Generate scenes with ChatGPT or add one manually.</div>',
+                '<div class="empty-state"><strong>No scenes yet</strong>Generate scenes with Groq or add one manually.</div>',
                 unsafe_allow_html=True,
             )
         else:
