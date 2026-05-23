@@ -455,11 +455,40 @@ def keywords(text, limit=5):
     return ranked[:limit]
 
 
+def proper_phrases(text, limit=5):
+    phrases = []
+    patterns = [
+        r"\b(?:[A-Z][a-zA-Z0-9-]+(?:\s+[A-Z][a-zA-Z0-9-]+){0,4})\b",
+        r"\b\d{3,4}\b",
+        r"\b\d+(?:\.\d+)?\s*(?:%|km|m|cm|mm|kg|g|years?|days?|hours?)\b",
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, text or ""):
+            cleaned = match.strip(" ,.;:()[]")
+            if len(cleaned) < 3 or cleaned.lower() in STOP_WORDS:
+                continue
+            if cleaned not in phrases:
+                phrases.append(cleaned)
+            if len(phrases) >= limit:
+                return phrases
+    return phrases[:limit]
+
+
+def scene_terms(text, limit=6):
+    phrases = proper_phrases(text, limit)
+    remaining = [word.capitalize() for word in keywords(text, limit) if word.capitalize() not in phrases]
+    return (phrases + remaining)[:limit]
+
+
 def title_from_text(text, fallback):
-    found = keywords(text, 4)
+    phrases = proper_phrases(text, 2)
+    found = scene_terms(text, 5)
+    if phrases and len(phrases[0].split()) <= 4:
+        title_words = phrases[:2] + [word for word in found if word not in phrases][:2]
+        return " ".join(title_words)[:48]
     if not found:
         return fallback
-    return " ".join(word.capitalize() for word in found[:4])
+    return " ".join(found[:4])[:48]
 
 
 def asset_name(word):
@@ -475,9 +504,11 @@ def concise_source_excerpt(text, limit=320):
     return f"{cut}..."
 
 
-def visual_description_for_scene(title, body, labels):
+def visual_description_for_scene(title, body, labels, scene_number=1):
     excerpt = concise_source_excerpt(body, 360)
     label_text = ", ".join(labels[:4]) if labels else "the main ideas"
+    focus = scene_terms(body, 7)
+    focus_text = ", ".join(focus[:6]) if focus else label_text
     kind_hint = scene_kind(
         {
             "title": title,
@@ -487,23 +518,77 @@ def visual_description_for_scene(title, body, labels):
             "assets": [],
         }
     )
-    layout_notes = {
-        "timeline": "Use a chronological left-to-right timeline with dated milestones and clear progression.",
-        "cycle": "Use a circular cycle diagram with arrows showing repetition and cause-effect movement.",
-        "cell": "Use a magnified biological cutaway with organelles or body structures arranged accurately.",
-        "space": "Use a deep-space composition with planets, orbit paths, scale contrast, and rim lighting.",
-        "map": "Use a topographic map-like layout with routes, regions, markers, and spatial relationships.",
-        "data": "Use a clean data visualization scene with dimensional bars, comparison markers, and measured contrast.",
-        "process": "Use a step-by-step flow scene with arrows showing transformation from start to outcome.",
-        "concept": "Use a central 3D concept model surrounded by supporting objects and annotation callouts.",
+    layout_variants = {
+        "timeline": [
+            "Build a left-to-right chronological timeline with one highlighted milestone in the foreground.",
+            "Show layered historical panels receding into depth, with the current scene milestone glowing.",
+            "Create a museum display timeline with dated markers, artifacts, and progression arrows.",
+        ],
+        "cycle": [
+            "Create a circular cycle with four distinct stages connected by curved arrows.",
+            "Show the cycle as a rotating 3D mechanism, with the active stage enlarged in front.",
+            "Use a top-down loop diagram with clear stage icons and motion trails.",
+        ],
+        "cell": [
+            "Show a magnified cutaway with transparent membranes and accurately placed inner structures.",
+            "Create a microscope-style close-up with the key structure enlarged and supporting structures around it.",
+            "Use a semi-transparent biological model with callout lines pointing to the main parts.",
+        ],
+        "space": [
+            "Use a deep-space scene with scale contrast, orbit paths, and rim-lit planetary objects.",
+            "Show the main celestial body in the foreground with related bodies arranged in realistic depth.",
+            "Create a cinematic orbital diagram with trails, glow, and clear spatial relationships.",
+        ],
+        "map": [
+            "Use a 3D relief map with routes, region markers, and terrain-like depth.",
+            "Show a map table with pins, paths, and highlighted regions matching the source.",
+            "Create a satellite-style educational map with layered markers and directional arrows.",
+        ],
+        "data": [
+            "Use dimensional charts and comparison markers, with the key number or trend visually dominant.",
+            "Show a clean data wall with bars, lines, and highlighted changes arranged like an exhibit.",
+            "Create a 3D comparison scene where scale differences are physically visible.",
+        ],
+        "process": [
+            "Show a step-by-step transformation from left to right with arrows and changing object states.",
+            "Create a production-line style process with each step as a separate lit station.",
+            "Use a layered flow diagram where inputs, actions, and outputs are spatially separated.",
+        ],
+        "concept": [
+            "Place the central concept as a large 3D object, surrounded by smaller supporting objects.",
+            "Create a classroom exhibit scene with the main idea in front and supporting evidence behind it.",
+            "Show a split-scene composition: source context on the left, result or meaning on the right.",
+        ],
     }
+    variant = layout_variants.get(kind_hint, layout_variants["concept"])[(scene_number - 1) % 3]
     return (
-        f"Create an accurate educational 3D visualization about '{title}'. "
-        f"Represent this exact source content: {excerpt} "
-        f"Key visual elements must include: {label_text}. "
-        f"{layout_notes.get(kind_hint, layout_notes['concept'])} "
-        "Keep the composition clear, topic-specific, cinematic, and suitable for a textbook explainer."
+        f"Scene {scene_number} visual must be about '{title}', not a generic education graphic. "
+        f"Exact topic details to depict: {excerpt} "
+        f"Primary visible subjects: {focus_text}. "
+        f"Required callout ideas: {label_text}. "
+        f"Composition: {variant} "
+        "Use concrete objects from the topic, realistic materials, clear lighting, and no unrelated symbols."
     )
+
+
+def refresh_scene_descriptions(scenes):
+    for idx, scene in enumerate(scenes, start=1):
+        body = " ".join(
+            [
+                scene.get("title", ""),
+                scene.get("narration", ""),
+                scene.get("animation", ""),
+                " ".join(scene.get("labels", [])),
+            ]
+        )
+        labels = scene_terms(body, 4) or scene.get("labels", []) or [f"Key Point {idx}"]
+        scene["labels"] = labels[:4]
+        scene["title"] = title_from_text(body, scene.get("title", f"Scene {idx}"))
+        scene["assets"] = [asset_name(term) for term in labels[:4]]
+        if len(scene["assets"]) < 2:
+            scene["assets"].append("supporting_visual_model.glb")
+        scene["visual_description"] = visual_description_for_scene(scene["title"], body, labels, idx)
+    return renumber_scenes(scenes)
 
 
 def generate_scenes(source_text, count, auto_count):
@@ -516,9 +601,8 @@ def generate_scenes(source_text, count, auto_count):
     scenes = []
     for idx, chunk in enumerate(chunks, start=1):
         body = " ".join(chunk).strip()
-        keys = keywords(body, 5)
-        labels = [word.capitalize() for word in keys[:4]] or [f"Key Point {idx}"]
-        scene_assets = [asset_name(word) for word in (keys[:4] or ["main_concept", "supporting_visual"])]
+        labels = scene_terms(body, 4) or [f"Key Point {idx}"]
+        scene_assets = [asset_name(word) for word in (labels[:4] or ["main_concept", "supporting_visual"])]
         if len(scene_assets) < 2:
             scene_assets.append("supporting_visual.glb")
         narration = " ".join(chunk[:2]).strip()
@@ -539,7 +623,7 @@ def generate_scenes(source_text, count, auto_count):
                         "4. Hold on a clean final composition for narration.",
                     ]
                 ),
-                "visual_description": visual_description_for_scene(title, body, labels),
+                "visual_description": visual_description_for_scene(title, body, labels, idx),
                 "narration": narration,
                 "scene_image": None,
             }
@@ -642,15 +726,16 @@ def ai_image_prompt(scene):
     animation = scene.get("animation", "").replace("\\n", "\n")
     return (
         "Premium educational 3D CGI storyboard frame, cinematic 16:9, high detail, sharp focus. "
-        f"Main topic: {title}. "
-        f"FOLLOW THIS VISUAL DESCRIPTION EXACTLY: {visual}. "
-        f"Important objects or assets to show: {asset_list}. "
-        f"Important concepts to show visually: {labels}. "
-        f"Action or moment: {animation}. "
-        f"Narration context: {narration}. "
+        f"The image MUST depict this exact topic: {title}. "
+        f"FOLLOW THIS VISUAL DESCRIPTION EXACTLY and make it the main scene: {visual}. "
+        f"Visible objects must be related to these assets only: {asset_list}. "
+        f"Represent these concepts as objects or callouts without readable text: {labels}. "
+        f"Use this source context to avoid unrelated imagery: {narration}. "
+        f"Show this action or relationship: {animation}. "
         "Use accurate subject-specific objects, realistic scale relationships, professional studio lighting, "
         "clear foreground/midground/background, rich materials, educational museum exhibit quality. "
-        "Avoid random fantasy elements. Avoid unrelated objects. No watermark, no logo, no UI, no captions, no text."
+        "Do not create a generic classroom, random icons, fantasy elements, unrelated landscapes, or abstract decoration. "
+        "No watermark, no logo, no UI, no captions, no readable text."
     )
 
 
@@ -1223,7 +1308,7 @@ elif nav == "Editor":
                 unsafe_allow_html=True,
             )
         else:
-            summary, actions = st.columns([.72, .28])
+            summary, actions = st.columns([.58, .42])
             with summary:
                 image_count = sum(1 for scene in scenes if scene.get("scene_image"))
                 st.markdown(
@@ -1231,7 +1316,16 @@ elif nav == "Editor":
                     unsafe_allow_html=True,
                 )
             with actions:
-                if st.button("Generate missing images", use_container_width=True):
+                a1, a2 = st.columns(2)
+                with a1:
+                    if st.button("Refresh descriptions", use_container_width=True):
+                        scenes = refresh_scene_descriptions(scenes)
+                        save_scenes(scenes)
+                        st.success("Scene titles, labels, assets, and visual descriptions refreshed.")
+                        st.rerun()
+                with a2:
+                    gen_missing = st.button("Generate images", use_container_width=True)
+                if gen_missing:
                     try:
                         targets = [idx for idx, scene in enumerate(scenes) if not scene.get("scene_image")]
                         if not targets:
